@@ -1,0 +1,249 @@
+{
+  "initialUserDetails": {
+    "name": "Sayan Pal",
+    "email": "sayan.pal@example.com",
+    "bio": "A dedicated student passionate about learning and personal growth.",
+    "profilePic": "defaultProfilePic"
+  },
+
+  "sidebarUserData": {
+    "name": "Sayan Pal",
+    "email": "sayan.pal@example.com",
+    "role": "Student",
+    "profilePic": "https://ui-avatars.com/api/?name=Sayan+Pal&background=random&size=128"
+  },
+  "allMentors": [
+    {
+      "id": 1,
+      "name": "Dr. Ananya Mehta",
+      "expertise": ["Clinical Psychology", "Trauma Therapy", "CBT"],
+      "rating": 5,
+      "isVerified": true,
+      "bio": "Clinical psychologist specializing in trauma recovery and evidence-based therapeutic practices.",
+      "profilePic": "https://ui-avatars.com/api/?name=Ananya+Mehta&background=random&size=128"
+    },
+    {
+      "id": 2,
+      "name": "Dr. Rohan Kapoor",
+      "expertise": ["Child Psychology", "Behavioral Therapy", "ADHD"],
+      "rating": 5,
+      "isVerified": true,
+      "bio": "Child psychologist with 10+ years of experience in cognitive and behavioral evaluations.",
+      "profilePic": "https://ui-avatars.com/api/?name=Rohan+Kapoor&background=random&size=128"
+    },
+    {
+      "id": 3,
+      "name": "Dr. Priya Menon",
+      "expertise": [
+        "Counseling Psychology",
+        "Stress Management",
+        "Relationship Therapy"
+      ],
+      "rating": 4,
+      "isVerified": true,
+      "bio": "Counseling expert helping individuals manage stress, emotions, and interpersonal challenges.",
+      "profilePic": "https://ui-avatars.com/api/?name=Priya+Menon&background=random&size=128"
+    },
+    {
+      "id": 4,
+      "name": "Dr. Arjun Deshmukh",
+      "expertise": ["Neuropsychology", "Brain Health", "Memory Disorders"],
+      "rating": 5,
+      "isVerified": true,
+      "bio": "Neuropsychologist focused on cognitive health, memory rehabilitation, and brain function studies.",
+      "profilePic": "https://ui-avatars.com/api/?name=Arjun+Deshmukh&background=random&size=128"
+    },
+    {
+      "id": 5,
+      "name": "Dr. Kavita Sharma",
+      "expertise": [
+        "Educational Psychology",
+        "Learning Disabilities",
+        "Adolescent Psychology"
+      ],
+      "rating": 5,
+      "isVerified": false,
+      "bio": "Expert in child learning patterns, academic stress, and developmental education.",
+      "profilePic": "https://ui-avatars.com/api/?name=Kavita+Sharma&background=random&size=128"
+    },
+    {
+      "id": 6,
+      "name": "Dr. Harshita Reddy",
+      "expertise": ["Psychotherapy", "Mindfulness", "Anxiety Treatment"],
+      "rating": 4,
+      "isVerified": true,
+      "bio": "Psychotherapist helping individuals overcome anxiety using mindfulness and cognitive therapies.",
+      "profilePic": "https://ui-avatars.com/api/?name=Harshita+Reddy&background=random&size=128"
+    },
+    {
+      "id": 7,
+      "name": "Dr. Sameer Khan",
+      "expertise": ["Sports Psychology", "Motivation", "Peak Performance"],
+      "rating": 5,
+      "isVerified": true,
+      "bio": "Sports psychologist mentoring athletes on mental resilience and performance optimization.",
+      "profilePic": "https://ui-avatars.com/api/?name=Sameer+Khan&background=random&size=128"
+    },
+    {
+      "id": 8,
+      "name": "Dr. Sneha Pillai",
+      "expertise": ["Mental Wellness", "Depression", "Holistic Therapy"],
+      "rating": 4,
+      "isVerified": false,
+      "bio": "Mental wellness coach using holistic methods to promote emotional balance and stability.",
+      "profilePic": "https://ui-avatars.com/api/?name=Sneha+Pillai&background=random&size=128"
+    },
+    {
+      "id": 9,
+      "name": "Dr. Vikram Ahuja",
+      "expertise": [
+        "Organizational Psychology",
+        "Leadership Coaching",
+        "Workplace Behavior"
+      ],
+      "rating": 5,
+      "isVerified": true,
+      "bio": "Specialist in workplace psychology, leadership development, and corporate behavioral training.",
+      "profilePic": "https://ui-avatars.com/api/?name=Vikram+Ahuja&background=random&size=128"
+    },
+    {
+      "id": 10,
+      "name": "Dr. Meera Joshi",
+      "expertise": [
+        "Marriage Counseling",
+        "Emotional Intelligence",
+        "Family Therapy"
+      ],
+      "rating": 5,
+      "isVerified": true,
+      "bio": "Family therapist helping couples and families build healthier emotional communication.",
+      "profilePic": "https://ui-avatars.com/api/?name=Meera+Joshi&background=random&size=128"
+    },
+    {
+      "id": 11,
+      "name": "Dr. Rajeev Nair",
+      "expertise": [
+        "Addiction Psychology",
+        "Rehabilitation",
+        "Behavior Change"
+      ],
+      "rating": 4,
+      "isVerified": true,
+      "bio": "Addiction counselor guiding individuals through recovery and behavioral transformation.",
+      "profilePic": "https://ui-avatars.com/api/?name=Rajeev+Nair&background=random&size=128"
+    },
+    {
+      "id": 12,
+      "name": "Dr. Tanvi Desai",
+      "expertise": [
+        "Cognitive Psychology",
+        "Human Behavior",
+        "Memory Research"
+      ],
+      "rating": 5,
+      "isVerified": false,
+      "bio": "Research-oriented psychologist focusing on cognitive patterns and human decision-making.",
+      "profilePic": "https://ui-avatars.com/api/?name=Tanvi+Desai&background=random&size=128"
+    },
+    {
+      "id": 13,
+      "name": "Dr. Ashwin Kulkarni",
+      "expertise": [
+        "Forensic Psychology",
+        "Criminal Profiling",
+        "Behavioral Analysis"
+      ],
+      "rating": 5,
+      "isVerified": true,
+      "bio": "Forensic psychologist working with behavioral assessment and criminal investigations.",
+      "profilePic": "https://ui-avatars.com/api/?name=Ashwin+Kulkarni&background=random&size=128"
+    },
+    {
+      "id": 14,
+      "name": "Dr. Nisha Varma",
+      "expertise": [
+        "Rehabilitation Psychology",
+        "Special Needs",
+        "Developmental Disorders"
+      ],
+      "rating": 4,
+      "isVerified": true,
+      "bio": "Rehabilitation psychologist dedicated to supporting individuals with special needs.",
+      "profilePic": "nisha_varma.jpg"
+    },
+    {
+      "id": 15,
+      "name": "Dr. Deepak Saini",
+      "expertise": ["Industrial Psychology", "Team Dynamics", "HR Consulting"],
+      "rating": 5,
+      "isVerified": false,
+      "bio": "Industrial-organizational psychologist enhancing productivity and workplace harmony.",
+      "profilePic": "https://ui-avatars.com/api/?name=Deepak+Saini&background=random&size=128"
+    },
+    {
+      "id": 16,
+      "name": "Dr. Rhea Sen",
+      "expertise": [
+        "Therapeutic Counseling",
+        "Self-esteem Therapy",
+        "Emotional Healing"
+      ],
+      "rating": 5,
+      "isVerified": true,
+      "bio": "Therapist helping individuals regain confidence through emotional healing methods.",
+      "profilePic": "https://ui-avatars.com/api/?name=Rhea+Sen&background=random&size=128"
+    },
+    {
+      "id": 17,
+      "name": "Dr. Tushar Jain",
+      "expertise": [
+        "Health Psychology",
+        "Lifestyle Therapy",
+        "Behavioral Medicine"
+      ],
+      "rating": 4,
+      "isVerified": true,
+      "bio": "Health psychologist guiding people through long-term lifestyle and behavioral changes.",
+      "profilePic": "https://ui-avatars.com/api/?name=Tushar+Jain&background=random&size=128"
+    },
+    {
+      "id": 18,
+      "name": "Dr. Aditi Dwivedi",
+      "expertise": [
+        "Positive Psychology",
+        "Motivational Coaching",
+        "Wellbeing"
+      ],
+      "rating": 5,
+      "isVerified": false,
+      "bio": "Well-being specialist focusing on strengths-based development and positivity.",
+      "profilePic": "https://ui-avatars.com/api/?name=Aditi+Dwivedi&background=random&size=128"
+    },
+    {
+      "id": 19,
+      "name": "Dr. Zaid Hussain",
+      "expertise": [
+        "Social Psychology",
+        "Group Behavior",
+        "Cultural Psychology"
+      ],
+      "rating": 4,
+      "isVerified": true,
+      "bio": "Researcher in social behavior and cultural impact on interpersonal dynamics.",
+      "profilePic": "https://ui-avatars.com/api/?name=Zaid+Hussain&background=random&size=128"
+    },
+    {
+      "id": 20,
+      "name": "Dr. Shreya Talwar",
+      "expertise": [
+        "Therapeutic Art",
+        "Emotional Expression",
+        "Creative Therapy"
+      ],
+      "rating": 5,
+      "isVerified": true,
+      "bio": "Art therapist using creative expression as a tool for psychological healing.",
+      "profilePic": "https://ui-avatars.com/api/?name=Shreya+Talwar&background=random&size=128"
+    }
+  ]
+}
