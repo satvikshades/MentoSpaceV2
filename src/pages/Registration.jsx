@@ -6,38 +6,43 @@ import {
   FaGraduationCap,
   FaBriefcase,
 } from "react-icons/fa";
+
+import {
+  auth,
+  createUserWithEmailAndPassword,
+  sendEmailVerification,
+  updateProfile,
+  googleProvider,
+  signInWithPopup,
+  createUserDoc,
+} from "../firebase";
+
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../firebase";
+
 import InputField from "../components/common/InputField";
 import { FaGoogle } from "react-icons/fa";
 import RoleRadioButton from "../components/RoleRadioButton";
 
-// This would typically come from react-router-dom in a real app
-const Link = ({ href, children, className }) => (
-  <a href={href} className={className}>
-    {children}
-  </a>
-);
+import { Link } from "react-router-dom"; // 🔥 FIXED
 
 function Registration() {
-  // State for all form inputs
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: "",
     confirmPassword: "",
-    role: "student", // Default role
+    role: "student",
     expertise: "",
   });
 
-  // State for validation errors
   const [errors, setErrors] = useState({});
-  // State for API submission
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState("");
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    // Clear validation error when user starts typing
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: null }));
     }
@@ -50,104 +55,126 @@ function Registration() {
 
   const validateForm = () => {
     const newErrors = {};
-    const { name, email, password, confirmPassword, role, expertise } =
-      formData;
+    const { name, email, password, confirmPassword, role, expertise } = formData;
 
     if (!name) newErrors.name = "Name is required.";
 
     const emailRegex = /^[^\s@]+@(gmail|hotmail|yahoo)\.com$/;
-    if (!email) {
-      newErrors.email = "Email is required.";
-    } else if (!emailRegex.test(email)) {
-      newErrors.email = "Please use a Gmail, Hotmail, or Yahoo email.";
-    }
+    if (!email) newErrors.email = "Email is required.";
+    else if (!emailRegex.test(email))
+      newErrors.email = "Please use Gmail, Hotmail, or Yahoo.";
 
-    const specialCharRegex = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+/;
-    if (!password) {
-      newErrors.password = "Password is required.";
-    } else if (password.length < 8) {
-      newErrors.password = "Password must be at least 8 characters long.";
-    } else if (!specialCharRegex.test(password)) {
+    const specialCharRegex = /[!@#$%^&*]/;
+    if (!password) newErrors.password = "Password is required.";
+    else if (password.length < 8)
+      newErrors.password = "Password must be at least 8 characters.";
+    else if (!specialCharRegex.test(password))
       newErrors.password = "Password must contain a special character.";
-    }
 
-    if (password !== confirmPassword) {
+    if (password !== confirmPassword)
       newErrors.confirmPassword = "Passwords do not match.";
-    }
 
-    if (role === "mentor" && !expertise) {
-      newErrors.expertise = "Please select your area of expertise.";
-    }
+    if (role === "mentor" && !expertise)
+      newErrors.expertise = "Please select your expertise.";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
+  // 🔥 FIREBASE REGISTRATION
   const handleSubmit = async (e) => {
     e.preventDefault();
     setApiError("");
 
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
 
     setIsLoading(true);
 
-    const userData = {
-      name: formData.name,
-      email: formData.email,
-      password: formData.password,
-      role: formData.role,
-    };
+    try {
+      const cred = await createUserWithEmailAndPassword(
+        auth,
+        formData.email,
+        formData.password
+      );
 
-    if (userData.role === "mentor") {
-      userData.expertise = formData.expertise;
+      if (formData.name) {
+        await updateProfile(cred.user, { displayName: formData.name });
+      }
+
+      await createUserDoc(cred.user.uid, {
+        name: formData.name,
+        email: formData.email,
+        role: formData.role,
+        expertise: formData.expertise || "",
+      });
+
+      localStorage.setItem("ms_user_role", formData.role);
+
+      await sendEmailVerification(cred.user);
+
+      alert("Registration successful! Please verify your email.");
+
+      window.location.href = "/login"; // 🔥 FIXED ROUTE
+      return;
+    } catch (err) {
+      console.error("Registration error:", err);
+      setApiError(err.message || "Registration failed.");
+    } finally {
+      setIsLoading(false);
     }
-
-    // API Call
   };
 
-  async function handleGoogleRegister() {}
+  // 🔥 GOOGLE REGISTER
+  const handleGoogleRegister = async () => {
+    setApiError("");
+    setIsLoading(true);
+
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+
+      const ref = doc(db, "users", user.uid);
+      const snap = await getDoc(ref);
+
+      if (!snap.exists()) {
+        await createUserDoc(user.uid, {
+          name: user.displayName || "",
+          email: user.email,
+          role: "student",
+          expertise: "",
+        });
+      }
+
+      window.location.href = "/dashboard/profile"; // 🔥 FIXED
+    } catch (err) {
+      console.error(err);
+      setApiError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen font-poppins bg-bg-light-gray flex">
-      {/* Left Panel - Branding */}
       <div className="hidden lg:flex w-1/2 flex-col items-center justify-center bg-gradient-to-br from-primary to-secondary text-white p-12 text-center">
         <h1 className="font-montserrat text-5xl font-bold leading-tight">
           Forge Your Future
         </h1>
         <p className="mt-4 max-w-md text-lg opacity-90">
-          Connect with mentors who can guide your path or share your expertise
-          to inspire the next generation. Join the MentoSpace community today!
+          Connect with mentors and build your path with confidence.
         </p>
-        <div className="absolute bottom-10">
-          <Link href="index.html" className="text-center group">
-            <p className="font-montserrat text-3xl font-bold group-hover:text-gray-200 transition-colors">
-              MentoSpace<span className="text-white">.</span>
-            </p>
-            <p className="text-sm opacity-90 tracking-wide">
-              Building strong individuals
-            </p>
-          </Link>
-        </div>
       </div>
 
-      {/* Right Panel - Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-8">
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-6">
         <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 space-y-6">
-          <div>
-            <h2 className="font-montserrat text-3xl font-bold text-gray-800">
-              Create an Account
-            </h2>
-            <p className="text-gray-500 mt-2">
-              Sign up to get started with MentoSpace.
-            </p>
-          </div>
+          <h2 className="font-montserrat text-3xl font-bold text-gray-800">
+            Create an Account
+          </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Step 2: Replace Heroicons with react-icons components */}
             <InputField
               id="name"
+              name="name"
               type="text"
               placeholder="Name"
               value={formData.name}
@@ -157,6 +184,7 @@ function Registration() {
             />
             <InputField
               id="email"
+              name="email"
               type="email"
               placeholder="Email"
               value={formData.email}
@@ -166,6 +194,7 @@ function Registration() {
             />
             <InputField
               id="password"
+              name="password"
               type="password"
               placeholder="Password"
               value={formData.password}
@@ -174,6 +203,7 @@ function Registration() {
               icon={<FaLock />}
             />
             <InputField
+              id="confirmPassword"
               name="confirmPassword"
               type="password"
               placeholder="Confirm Password"
@@ -183,12 +213,9 @@ function Registration() {
               icon={<FaLock />}
             />
 
-            {/* Role Selection */}
-            <div className="pt-2">
-              <p className="block text-sm font-medium text-gray-700 mb-2">
-                I am signing up as a:
-              </p>
-              <div className="flex items-center gap-4">
+            <div>
+              <p className="text-gray-700 mb-2">I am signing up as:</p>
+              <div className="flex gap-4">
                 <RoleRadioButton
                   id="role-student"
                   name="role"
@@ -210,30 +237,26 @@ function Registration() {
               </div>
             </div>
 
-            {/* Conditional Mentor Expertise Field */}
             {formData.role === "mentor" && (
-              <div className="transition-all duration-500">
-                <InputField
-                  id="expertise"
-                  as="select"
-                  value={formData.expertise}
-                  onChange={handleInputChange}
-                  error={errors.expertise}
-                  icon={<FaGraduationCap />}
-                >
-                  <option value="" disabled>
-                    Select your expertise
-                  </option>
-                  <option value="personal">Personal Development</option>
-                  <option value="spiritual">Spiritual Growth</option>
-                  <option value="career">Career & Business</option>
-                  <option value="educational">Educational Guidance</option>
-                </InputField>
-              </div>
+              <InputField
+                id="expertise"
+                name="expertise"
+                as="select"
+                value={formData.expertise}
+                onChange={handleInputChange}
+                error={errors.expertise}
+                icon={<FaGraduationCap />}
+              >
+                <option value="" disabled>Select your expertise</option>
+                <option value="personal">Personal Development</option>
+                <option value="spiritual">Spiritual Growth</option>
+                <option value="career">Career & Business</option>
+                <option value="educational">Educational Guidance</option>
+              </InputField>
             )}
 
             {apiError && (
-              <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">
+              <p className="text-red-600 bg-red-50 p-3 rounded-lg">
                 {apiError}
               </p>
             )}
@@ -241,34 +264,28 @@ function Registration() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 px-4 font-bold text-white bg-gradient-to-r from-primary to-secondary rounded-lg transform hover:-translate-y-0.5 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-white font-bold rounded-lg"
             >
               {isLoading ? "Registering..." : "Register"}
             </button>
 
-            <p className="text-center text-sm text-gray-500 pt-2">
+            <p className="text-center text-sm text-gray-500">
               Already have an account?{" "}
-              <Link
-                href="/login"
-                className="font-semibold text-primary hover:underline"
-              >
+              <Link to="/login" className="text-primary font-semibold"> {/* 🔥 FIXED */}
                 Login here
               </Link>
             </p>
           </form>
-          <div className="relative flex items-center py-2">
-            <div className="flex-grow border-t border-gray-300"></div>
-            <span className="flex-shrink mx-4 text-sm font-semibold text-gray-400">
-              OR
-            </span>
-            <div className="flex-grow border-t border-gray-300"></div>
+
+          <div className="flex items-center">
+            <div className="flex-grow border-t" />
+            <span className="px-2 text-gray-400">OR</span>
+            <div className="flex-grow border-t" />
           </div>
 
-          {/* Google Registration Button */}
           <button
-            type="button"
             onClick={handleGoogleRegister}
-            className="cursor-pointer w-full flex items-center justify-center gap-3 py-2.5 px-4 font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg transform hover:bg-gray-50 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+            className="w-full flex gap-2 items-center justify-center py-3 border rounded-lg"
           >
             <FaGoogle className="text-red-500" />
             Register with Google

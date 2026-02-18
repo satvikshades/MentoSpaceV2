@@ -25,11 +25,23 @@ const HeroSection = () => {
             Together
           </span>
         </h1>
-        <p className="text-base md:text-lg max-w-2xl mx-auto mb-10 leading-relaxed">
+
+        <p className="text-base md:text-lg max-w-2xl mx-auto mb-6 leading-relaxed">
           Through peer support, we empower people to develop the skills needed
           to navigate life's challenges, enhance their quality of life, and
           pursue their personal goals.
         </p>
+
+        {/* Vision Statement */}
+        <div className="mb-10 mt-2">
+  <p className="text-gray-500 text-sm italic">
+    A vision by <span className="font-medium">Satvik Sanisetty</span>
+  </p>
+  <p className="text-gray-600 text-sm mt-1">
+    Creating a world where no one has to face depression alone.
+  </p>
+</div>
+
         <Link
           to="/register"
           className="inline-block px-9 py-4 bg-primary text-white font-semibold text-lg rounded-full transition-all duration-300 ease-in-out shadow-lg hover:-translate-y-1 hover:shadow-2xl"

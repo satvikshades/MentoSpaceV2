@@ -1,98 +1,168 @@
+// Sidebar.jsx
 import { Link, NavLink } from "react-router-dom";
-import { sidebarData } from "../../../constatnts/data.json";
-
-import { FaBookAtlas, FaClock, FaGear, FaHouse, FaUser } from "react-icons/fa6";
-import { FaTimes } from "react-icons/fa";
-import defaultProfilePic from "../../../assets/188353.jpg";
+import { 
+  FaHouse, 
+  FaClock, 
+  FaGear, 
+  FaUser, 
+  FaUsers, 
+  FaBook 
+} from "react-icons/fa6";
+import { FaCommentDots } from "react-icons/fa"; // Comes only from FA5
 import { BiLogOut } from "react-icons/bi";
-import { sidebarUserData } from "../../../constatnts/userdata.json";
+import { useEffect, useState } from "react";
+import { auth, db } from "../../../firebase";
+import { signOut } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 
-const iconMap = {
-  "fa-solid fa-house": <FaHouse />,
-  "fa-solid fa-user": <FaUser />,
-  "fa-solid fa-clock": <FaClock />,
-  "fa-solid fa-book": <FaBookAtlas />,
-  "fa-solid fa-gear": <FaGear />,
-};
+function Sidebar({ role }) {
+  const [userData, setUserData] = useState(null);
 
-function Sidebar({ isOpen, setIsOpen }) {
-  function handleLogout() {
-    // logout logic
-  }
-
-  const handleLinkClick = () => {
-    if (window.innerWidth < 1024) {
-      // 1024px is the lg breakpoint in Tailwind
-      setIsOpen(false);
+  useEffect(() => {
+    async function load() {
+      if (!auth.currentUser) return;
+      const snap = await getDoc(doc(db, "users", auth.currentUser.uid));
+      if (snap.exists()) setUserData(snap.data());
     }
+    load();
+  }, []);
+
+  const handleLogout = async () => {
+    await signOut(auth);
+    localStorage.clear();
+    window.location.href = "/login";
   };
 
   return (
     <div className="flex flex-col h-full p-4">
-      {/* Logo and Close Button */}
-      <div className="flex items-center justify-between mb-8">
-        <div className="text-center">
-          <Link to="/">
-            <h2 className="font-montserrat text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-              MentoSpace<span className="text-secondary">.</span>
-            </h2>
-          </Link>
-        </div>
-        {/* Close button for mobile view */}
-        <button
-          onClick={() => setIsOpen(false)}
-          className="lg:hidden text-gray-500 hover:text-gray-800"
-        >
-          <FaTimes className="h-6 w-6" />
-        </button>
-      </div>
+      <Link to="/" className="mb-6">
+        <h2 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+          MentoSpace<span className="text-secondary">.</span>
+        </h2>
+      </Link>
 
-      {/* Navigation Links */}
       <nav className="flex-grow">
-        <ul>
-          {sidebarData.map((item) => (
-            <li key={item.id} className="mb-2">
+        <ul className="space-y-2">
+
+          {/* My Profile */}
+          <li>
+            <NavLink
+              to="/dashboard/profile"
+              className={({ isActive }) =>
+                isActive
+                  ? "block p-3 rounded bg-primary/10 text-primary"
+                  : "block p-3 rounded hover:bg-gray-100"
+              }
+            >
+              <FaHouse className="inline mr-2" /> My Profile
+            </NavLink>
+          </li>
+
+          {/* Student Only → Find Mentor */}
+          {role === "student" && (
+            <li>
               <NavLink
-                to={item.link}
-                onClick={handleLinkClick}
+                to="/dashboard/find-mentor"
                 className={({ isActive }) =>
-                  `flex items-center gap-3 p-3 rounded-lg transition-colors duration-200 ${
-                    isActive
-                      ? "bg-primary/10 text-primary font-bold"
-                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                  }`
+                  isActive
+                    ? "block p-3 rounded bg-primary/10 text-primary"
+                    : "block p-3 rounded hover:bg-gray-100"
                 }
               >
-                <span className="w-6 h-6 mt-2">{iconMap[item.icon]}</span>
-                <span>{item.title}</span>
+                🔎 Find Mentor
               </NavLink>
             </li>
-          ))}
+          )}
+
+          {/* Mentor Only → Sessions + My Students */}
+          {role === "mentor" && (
+            <>
+              <li>
+                <NavLink
+                  to="/dashboard/sessions"
+                  className={({ isActive }) =>
+                    isActive
+                      ? "block p-3 rounded bg-primary/10 text-primary"
+                      : "block p-3 rounded hover:bg-gray-100"
+                  }
+                >
+                  <FaClock className="inline mr-2" /> Sessions
+                </NavLink>
+              </li>
+
+              <li>
+                <NavLink
+                  to="/dashboard/my-students"
+                  className={({ isActive }) =>
+                    isActive
+                      ? "block p-3 rounded bg-primary/10 text-primary"
+                      : "block p-3 rounded hover:bg-gray-100"
+                  }
+                >
+                  <FaUsers className="inline mr-2" /> My Students
+                </NavLink>
+              </li>
+            </>
+          )}
+
+          {/* Chats */}
+          <li>
+            <NavLink
+              to="/dashboard/chats"
+              className={({ isActive }) =>
+                isActive
+                  ? "block p-3 rounded bg-primary/10 text-primary"
+                  : "block p-3 rounded hover:bg-gray-100"
+              }
+            >
+              <FaCommentDots className="inline mr-2" /> Chats
+            </NavLink>
+          </li>
+
+          {/* Settings */}
+          <li>
+            <NavLink
+              to="/dashboard/settings"
+              className={({ isActive }) =>
+                isActive
+                  ? "block p-3 rounded bg-primary/10 text-primary"
+                  : "block p-3 rounded hover:bg-gray-100"
+              }
+            >
+              <FaGear className="inline mr-2" /> Settings
+            </NavLink>
+          </li>
+
         </ul>
       </nav>
 
-      {/* You can add a footer section here if needed, e.g., Logout button */}
+      {/* Bottom Profile Display */}
       <div className="mt-auto">
-        <div className="mb-4">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 p-3 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors duration-200 cursor-pointer"
-          >
-            <BiLogOut />
-            Logout
-          </button>
-        </div>
-        <div className="flex items-center gap-3 p-3 bg-gray-100 rounded-lg">
-          <img
-            src={sidebarUserData.profilePic}
-            alt="Profile"
-            className="w-10 h-10 rounded-full"
-          />
-          <div className="flex flex-col">
-            <h3 className="text-lg font-semibold">{sidebarUserData.name}</h3>
-            <p className="text-sm text-gray-500">{sidebarUserData.role}</p>
+        {userData && (
+          <div className="flex items-center gap-3 p-3 mt-3 bg-gray-100 rounded-lg">
+            <img
+              src={
+                userData.profilePic ||
+                `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                  userData.name
+                )}`
+              }
+              alt="profile"
+              className="w-10 h-10 rounded-full"
+            />
+            <div>
+              <div className="font-semibold">{userData.name}</div>
+              <div className="text-sm text-gray-500">{userData.role}</div>
+            </div>
           </div>
-        </div>
+        )}
+
+        <button
+          onClick={handleLogout}
+          className="w-full mt-3 p-3 bg-red-100 text-red-600 rounded-lg"
+        >
+          <BiLogOut /> Logout
+        </button>
       </div>
     </div>
   );
