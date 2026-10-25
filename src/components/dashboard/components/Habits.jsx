@@ -1,422 +1,220 @@
-// src/components/dashboard/components/Habits.jsx
-import { useEffect, useMemo, useState } from "react";
-import { auth, db } from "../../../firebase";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  addDoc,
-  doc,
-  updateDoc,
-  serverTimestamp,
-} from "firebase/firestore";
+import { useState } from "react";
+import toast from "react-hot-toast";
+import { FiPlus } from "react-icons/fi";
+import { useDashboard, useProgress } from "../../../lib/useProgress";
+import { addHabit, HABIT_CATEGORIES, HABIT_IDEAS, removeHabit } from "../../../lib/actions";
+import { doneToday } from "../../../lib/progress";
+import { EmptyState, Modal, PageHeader, PageSkeleton, Ring, Spinner } from "../../ui";
+import HabitRow from "./HabitRow";
+import { LevelCard, StreakCard } from "./Today";
 
-const CATEGORY_OPTIONS = [
-  "Study & Focus",
-  "Sleep & Rest",
-  "Fitness & Movement",
-  "Mindfulness & Meditation",
-  "Gratitude & Journaling",
-  "Social Connection",
-];
-
-function Habits() {
-  const user = auth.currentUser;
-  const [habits, setHabits] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  // form state for new habit
+function NewHabit({ open, onClose, onCreate }) {
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState(CATEGORY_OPTIONS[0] || "");
+  const [category, setCategory] = useState(HABIT_CATEGORIES[0].key);
   const [desc, setDesc] = useState("");
-
   const [saving, setSaving] = useState(false);
-  const [completingId, setCompletingId] = useState(null);
 
-  // ---------------------------------------
-  // Load habits for logged in student
-  // ---------------------------------------
-  useEffect(() => {
-    if (!user) return;
-
-    async function load() {
-      try {
-        const q = query(
-          collection(db, "habits"),
-          where("studentId", "==", user.uid)
-        );
-        const snap = await getDocs(q);
-        const data = snap.docs.map((d) => ({
-          id: d.id,
-          ...d.data(),
-        }));
-        setHabits(data);
-      } catch (err) {
-        console.error("Error loading habits:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    load();
-  }, [user]);
-
-  // ---------------------------------------
-  // Derived stats (XP, Level)
-  // ---------------------------------------
-  const totalXP = useMemo(
-    () => habits.reduce((sum, h) => sum + (h.xp || 0), 0),
-    [habits]
-  );
-
-  const level = Math.floor(totalXP / 100);
-  const nextLevelXP = (level + 1) * 100;
-  const currentLevelXP = level * 100;
-  const progressToNext =
-    totalXP >= nextLevelXP
-      ? 100
-      : Math.round(((totalXP - currentLevelXP) / (nextLevelXP - currentLevelXP || 1)) * 100);
-
-  // ---------------------------------------
-  // Add a new custom habit
-  // ---------------------------------------
-  const handleAddHabit = async (e) => {
+  const submit = async (e) => {
     e.preventDefault();
-    if (!user) {
-      alert("Please login first.");
-      return;
-    }
-    if (!title.trim()) {
-      alert("Please enter a habit title.");
-      return;
-    }
-
+    if (!title.trim()) return toast.error("Give your habit a name.");
     setSaving(true);
     try {
-      const docRef = await addDoc(collection(db, "habits"), {
-        studentId: user.uid,
-        title: title.trim(),
-        desc: desc.trim(),
-        category,
-        type: "custom",
-        streak: 0,
-        xp: 0,
-        level: 0,
-        lastCompleted: null,
-        createdAt: serverTimestamp(),
-      });
-
-      // update local state
-      setHabits((prev) => [
-        ...prev,
-        {
-          id: docRef.id,
-          studentId: user.uid,
-          title: title.trim(),
-          desc: desc.trim(),
-          category,
-          type: "custom",
-          streak: 0,
-          xp: 0,
-          level: 0,
-          lastCompleted: null,
-        },
-      ]);
-
+      await onCreate({ title, category, desc });
       setTitle("");
       setDesc("");
-      setCategory(CATEGORY_OPTIONS[0] || "");
-    } catch (err) {
-      console.error("Error adding habit:", err);
-      alert("Failed to add habit");
+      onClose();
     } finally {
       setSaving(false);
     }
   };
 
-  // ---------------------------------------
-  // Complete habit for today
-  // (1× per day per habit)
-  // ---------------------------------------
-  const handleCompleteToday = async (habit) => {
-    if (!user) return;
-    setCompletingId(habit.id);
-
-    const today = new Date();
-    const todayKey = today.toISOString().slice(0, 10); // YYYY-MM-DD
-
-    try {
-      // prevent double completion (habit_logs)
-      const logsRef = collection(db, "habit_logs");
-      const logSnap = await getDocs(
-        query(
-          logsRef,
-          where("studentId", "==", user.uid),
-          where("habitId", "==", habit.id),
-          where("dateKey", "==", todayKey)
-        )
-      );
-
-      if (!logSnap.empty) {
-        alert("You already completed this habit today! 🎉");
-        return;
-      }
-
-      // Streak logic based on lastCompleted in local state
-      let oldDate = null;
-      if (habit.lastCompleted && habit.lastCompleted.toDate) {
-        oldDate = habit.lastCompleted.toDate();
-      }
-
-      let newStreak = 1;
-      if (oldDate) {
-        const diffMs = today.setHours(0, 0, 0, 0) - oldDate.setHours(0, 0, 0, 0);
-        const diffDays = diffMs / (1000 * 60 * 60 * 24);
-
-        if (diffDays === 0) {
-          // already completed today (super safety)
-          alert("You already completed this habit today! 🎉");
-          return;
-        } else if (diffDays === 1) {
-          newStreak = (habit.streak || 0) + 1;
-        } else {
-          newStreak = 1;
-        }
-      }
-
-      // XP gain formula
-      const gainedXP = 20 + newStreak * 2;
-      const newXP = (habit.xp || 0) + gainedXP;
-      const newLevel = Math.floor(newXP / 100);
-
-      const habitRef = doc(db, "habits", habit.id);
-
-      // update habit
-      await updateDoc(habitRef, {
-        streak: newStreak,
-        xp: newXP,
-        level: newLevel,
-        lastCompleted: serverTimestamp(),
-      });
-
-      // add log
-      await addDoc(collection(db, "habit_logs"), {
-        studentId: user.uid,
-        habitId: habit.id,
-        dateKey: todayKey,
-        createdAt: serverTimestamp(),
-        earnedXP: gainedXP,
-        streakAfter: newStreak,
-      });
-
-      // update local state
-      setHabits((prev) =>
-        prev.map((h) =>
-          h.id === habit.id
-            ? {
-                ...h,
-                streak: newStreak,
-                xp: newXP,
-                level: newLevel,
-                lastCompleted: {
-                  toDate: () => new Date(), // simple fake timestamp for UI
-                },
-              }
-            : h
-        )
-      );
-
-      alert(`Nice! +${gainedXP} XP earned 🟣`);
-    } catch (err) {
-      console.error("Error completing habit:", err);
-      alert("Failed to complete habit.");
-    } finally {
-      setCompletingId(null);
-    }
-  };
-
-  if (!user) {
-    return <div className="p-6">Please log in to view your habits.</div>;
-  }
-
-  if (loading) {
-    return <div className="p-6">Loading your habits...</div>;
-  }
-
   return (
-    <div className="space-y-6">
-      {/* Top Gamified Summary */}
-      <div className="bg-white rounded-xl shadow p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <Modal open={open} onClose={onClose} title="New habit">
+      <form onSubmit={submit} className="space-y-4">
         <div>
-          <p className="text-sm text-gray-500">Your Growth</p>
-          <h2 className="text-2xl font-bold text-gray-800">
-            Level {level} Student 🌱
-          </h2>
-          <p className="text-sm text-gray-600 mt-1">
-            Total XP: <span className="font-semibold">{totalXP}</span>
-          </p>
+          <label className="label" htmlFor="h-title">What will you do?</label>
+          <input
+            id="h-title"
+            autoFocus
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="field"
+            placeholder="e.g. 10 minutes of reading"
+            maxLength={60}
+          />
+          <p className="mt-1.5 text-xs text-muted">Smaller is better. You can always grow it later.</p>
         </div>
-
-        <div className="w-full md:w-1/2">
-          <p className="text-xs text-gray-500 mb-1">
-            Progress to Level {level + 1}
-          </p>
-          <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-            <div
-              className="h-3 rounded-full bg-gradient-to-r from-primary to-secondary transition-all"
-              style={{ width: `${progressToNext}%` }}
-            ></div>
-          </div>
-          <p className="text-xs text-gray-500 mt-1 text-right">
-            {totalXP - currentLevelXP}/{nextLevelXP - currentLevelXP} XP
-          </p>
-        </div>
-      </div>
-
-      {/* Add Habit Form */}
-      <div className="bg-white rounded-xl shadow p-5 space-y-4">
-        <h3 className="text-lg font-semibold text-gray-800">
-          Add a positive habit
-        </h3>
-        <form
-          onSubmit={handleAddHabit}
-          className="grid grid-cols-1 md:grid-cols-2 gap-4"
-        >
-          <div className="md:col-span-1">
-            <label className="block text-sm text-gray-600 mb-1">
-              Habit name
-            </label>
-            <input
-              type="text"
-              placeholder="Eg: 10 min meditation"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm"
-            />
-          </div>
-
-          <div className="md:col-span-1">
-            <label className="block text-sm text-gray-600 mb-1">
-              Category
-            </label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm"
-            >
-              {CATEGORY_OPTIONS.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="block text-sm text-gray-600 mb-1">
-              Short description (optional)
-            </label>
-            <textarea
-              rows={2}
-              placeholder="Why is this habit important to you?"
-              value={desc}
-              onChange={(e) => setDesc(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm"
-            />
-          </div>
-
-          <div className="md:col-span-2 flex justify-end">
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 disabled:opacity-60"
-            >
-              {saving ? "Adding..." : "Add Habit"}
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* Habit List */}
-      <div className="space-y-3">
-        <h3 className="text-lg font-semibold text-gray-800">
-          Your daily quests
-        </h3>
-
-        {habits.length === 0 ? (
-          <p className="text-gray-500 text-sm">
-            No habits yet. Start by adding one above 👆
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {habits.map((habit) => (
-              <HabitCard
-                key={habit.id}
-                habit={habit}
-                onComplete={() => handleCompleteToday(habit)}
-                completing={completingId === habit.id}
-              />
+        <div>
+          <span className="label">Category</span>
+          <div className="grid grid-cols-2 gap-2">
+            {HABIT_CATEGORIES.map((c) => (
+              <button
+                type="button"
+                key={c.key}
+                onClick={() => setCategory(c.key)}
+                className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold ring-1 transition ${
+                  category === c.key ? "bg-primary-50 text-primary ring-primary" : "ring-line hover:bg-bg-light-gray"
+                }`}
+              >
+                <span>{c.icon}</span>
+                <span className="truncate">{c.key}</span>
+              </button>
             ))}
           </div>
-        )}
-      </div>
-    </div>
+        </div>
+        <div>
+          <label className="label" htmlFor="h-desc">Why it matters to you <span className="font-normal text-muted">(optional)</span></label>
+          <input id="h-desc" value={desc} onChange={(e) => setDesc(e.target.value)} className="field" maxLength={90} />
+        </div>
+        <button disabled={saving} className="btn-primary w-full">
+          {saving && <Spinner />} Add habit
+        </button>
+      </form>
+    </Modal>
   );
 }
 
-function HabitCard({ habit, onComplete, completing }) {
-  const lastDate =
-    habit.lastCompleted && habit.lastCompleted.toDate
-      ? habit.lastCompleted.toDate()
-      : null;
+function Habits() {
+  const { user } = useDashboard();
+  const p = useProgress(user.uid);
+  const [open, setOpen] = useState(false);
+  const [confirm, setConfirm] = useState(null);
 
-  const streak = habit.streak || 0;
-  const level = habit.level || 0;
+  if (p.loading) return <PageSkeleton />;
+
+  const done = p.habits.filter(doneToday).length;
+  const total = p.habits.length;
+
+  const create = async (data) => {
+    try {
+      const h = await addHabit(user.uid, data);
+      p.setHabits((prev) => [...prev, h]);
+      toast.success("Habit added");
+    } catch (err) {
+      console.error(err);
+      toast.error("Couldn't add that habit.");
+      throw err;
+    }
+  };
+
+  const doDelete = async () => {
+    const h = confirm;
+    setConfirm(null);
+    const before = p.habits;
+    p.setHabits((prev) => prev.filter((x) => x.id !== h.id));
+    try {
+      await removeHabit(h.id);
+      toast.success("Habit removed");
+    } catch {
+      p.setHabits(before);
+      toast.error("Couldn't remove it.");
+    }
+  };
+
+  const unused = HABIT_IDEAS.filter((i) => !p.habits.some((h) => h.title.toLowerCase() === i.title.toLowerCase()));
 
   return (
-    <div className="bg-white rounded-xl shadow p-4 flex flex-col justify-between h-full">
-      <div className="space-y-2">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-primary/70 font-semibold">
-              {habit.category || "Habit"}
-            </p>
-            <h4 className="text-base font-semibold text-gray-800">
-              {habit.title}
-            </h4>
-          </div>
+    <div>
+      <PageHeader
+        eyebrow="Habits"
+        title="Small things, every day"
+        subtitle="Each tick earns XP. Do the same habit on back-to-back days and it earns more."
+        action={
+          <button onClick={() => setOpen(true)} className="btn-primary">
+            <FiPlus /> New habit
+          </button>
+        }
+      />
 
-          {streak > 0 && (
-            <div className="flex flex-col items-end text-xs">
-              <span className="flex items-center gap-1 bg-orange-50 text-orange-600 px-2 py-1 rounded-full">
-                🔥 {streak} day{streak > 1 ? "s" : ""} streak
-              </span>
+      <div className="grid gap-5 lg:grid-cols-3">
+        <section className="space-y-5 lg:col-span-2">
+          {total > 0 && (
+            <div className="card flex items-center gap-5 p-5">
+              <Ring value={(done / total) * 100} size={72} stroke={7}>
+                <span className="text-sm font-extrabold">{Math.round((done / total) * 100)}%</span>
+              </Ring>
+              <div>
+                <p className="text-lg font-bold">
+                  {done === total ? "Everything's done for today" : `${done} of ${total} done today`}
+                </p>
+                <p className="text-sm text-muted">
+                  {done === total ? "Enjoy the rest of your day." : "Tap the circle when you finish one."}
+                </p>
+              </div>
             </div>
           )}
-        </div>
 
-        {habit.desc && (
-          <p className="text-xs text-gray-600 mt-1">{habit.desc}</p>
-        )}
+          {total === 0 ? (
+            <EmptyState
+              icon="✨"
+              title="No habits yet"
+              body="Start with one thing that takes under ten minutes. Pick an idea below or write your own."
+              action={
+                <button onClick={() => setOpen(true)} className="btn-primary">
+                  <FiPlus /> Add your first habit
+                </button>
+              }
+            />
+          ) : (
+            <div className="space-y-2">
+              {p.habits.map((h) => (
+                <HabitRow
+                  key={h.id}
+                  uid={user.uid}
+                  habit={h}
+                  onDelete={setConfirm}
+                  onUpdated={(nh, log) => {
+                    p.setHabits((prev) => prev.map((x) => (x.id === nh.id ? nh : x)));
+                    if (log) p.setLogs((prev) => [...prev, log]);
+                  }}
+                />
+              ))}
+            </div>
+          )}
 
-        <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
-          <span>Level {level}</span>
-          <span>XP: {habit.xp || 0}</span>
-        </div>
+          {unused.length > 0 && (
+            <div>
+              <p className="mb-2 text-sm font-semibold text-muted">Ideas that work for a lot of people</p>
+              <div className="flex flex-wrap gap-2">
+                {unused.map((idea) => (
+                  <button
+                    key={idea.title}
+                    onClick={() => create(idea)}
+                    className="flex items-center gap-1.5 rounded-full bg-white px-3.5 py-2 text-sm font-semibold ring-1 ring-line transition hover:text-primary hover:ring-primary"
+                  >
+                    <FiPlus className="h-3.5 w-3.5" /> {idea.title}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
 
-        <div className="mt-1 text-[11px] text-gray-400">
-          {lastDate ? `Last completed: ${lastDate.toLocaleDateString()}` : "Not completed yet"}
-        </div>
+        <aside className="space-y-5">
+          <StreakCard streak={p.streak} best={p.best} week={p.week} />
+          <LevelCard xp={p.xp} level={p.level} />
+          <div className="card p-5 text-sm leading-relaxed text-ink/80">
+            <p className="font-bold text-ink">How XP works</p>
+            <ul className="mt-2 space-y-1.5">
+              <li>Daily check-in: <b>+15</b></li>
+              <li>Habit done: <b>+22</b>, plus 2 for every day of its streak (up to +50)</li>
+              <li>Missed a day? Your XP and level stay. Only the streak resets.</li>
+            </ul>
+          </div>
+        </aside>
       </div>
 
-      <button
-        onClick={onComplete}
-        disabled={completing}
-        className="mt-4 w-full py-2 rounded-lg bg-gradient-to-r from-primary to-secondary text-white text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-      >
-        {completing ? "Completing..." : "Complete for today ✅"}
-      </button>
+      <NewHabit open={open} onClose={() => setOpen(false)} onCreate={create} />
+
+      <Modal open={!!confirm} onClose={() => setConfirm(null)} title="Remove this habit?">
+        <p className="text-sm text-muted">
+          “{confirm?.title}” and its streak will be removed. XP you've already earned from it goes with it.
+        </p>
+        <div className="mt-6 flex justify-end gap-2">
+          <button onClick={() => setConfirm(null)} className="btn-ghost">Keep it</button>
+          <button onClick={doDelete} className="btn bg-red-600 text-white hover:bg-red-700">Remove</button>
+        </div>
+      </Modal>
     </div>
   );
 }

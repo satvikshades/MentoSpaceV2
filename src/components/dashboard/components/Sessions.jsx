@@ -1,186 +1,203 @@
-import React, { useState, useEffect } from "react";
-import { FaClock, FaSearch, FaTag, FaTrash } from "react-icons/fa";
-import { FaCalendarDays, FaChalkboardUser, FaPlus } from "react-icons/fa6";
-import { auth, db } from "../../../firebase";
-import {
-  collection,
-  addDoc,
-  query,
-  where,
-  onSnapshot,
-  deleteDoc,
-  doc,
-} from "firebase/firestore";
+import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
+import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, where } from "firebase/firestore";
+import { FiCalendar, FiClock, FiPlus, FiTrash2 } from "react-icons/fi";
+import { db } from "../../../firebase";
+import { useDashboard } from "../../../lib/useProgress";
+import { dayKey, fmtTime } from "../../../lib/progress";
+import { EmptyState, Modal, PageHeader, PageSkeleton, Spinner } from "../../ui";
+
+const CATEGORIES = ["One-on-one", "Group", "Workshop", "Check-in"];
+
+function SessionCard({ s, onDelete, past }) {
+  const d = new Date(s.date + "T00:00");
+  return (
+    <div className={`card flex gap-4 p-4 ${past ? "opacity-60" : ""}`}>
+      <div className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-primary-50 text-center leading-none text-primary">
+        <div>
+          <p className="text-[11px] font-bold uppercase">{d.toLocaleDateString(undefined, { month: "short" })}</p>
+          <p className="mt-1 text-2xl font-extrabold">{d.getDate()}</p>
+        </div>
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-bold uppercase tracking-wider text-secondary">{s.category}</p>
+        <p className="truncate text-[17px] font-bold">{s.title}</p>
+        <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
+          <span className="inline-flex items-center gap-1">
+            <FiCalendar /> {d.toLocaleDateString(undefined, { weekday: "short" })}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <FiClock /> {fmtTime(s.time)}
+          </span>
+          {!onDelete && <span>with {s.mentorName}</span>}
+        </p>
+      </div>
+      {onDelete && (
+        <button onClick={() => onDelete(s)} className="self-start rounded-lg p-2 text-muted hover:bg-red-50 hover:text-red-600" aria-label="Delete session">
+          <FiTrash2 />
+        </button>
+      )}
+    </div>
+  );
+}
 
 function Sessions() {
-  const user = auth.currentUser;
+  const { user, profile, role } = useDashboard();
+  const isMentor = role === "mentor";
+  const [sessions, setSessions] = useState(null);
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [confirm, setConfirm] = useState(null);
+  const [form, setForm] = useState({ title: "", category: CATEGORIES[0], date: dayKey(), time: "18:00" });
 
-  const [sessions, setSessions] = useState([]);
-  const [showForm, setShowForm] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-
-  const [form, setForm] = useState({
-    title: "",
-    category: "General",
-    date: "",
-    time: "",
-  });
-
-  // ---------------------------
-  // Load mentor sessions
-  // ---------------------------
   useEffect(() => {
-    if (!user) return;
-
-    const q = query(
-      collection(db, "sessions"),
-      where("mentorId", "==", user.uid)
-    );
-
-    const unsub = onSnapshot(q, (snapshot) => {
-      setSessions(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-
-    return () => unsub();
-  }, [user]);
-
-  // ---------------------------
-  // Create session
-  // ---------------------------
-  const createSession = async () => {
-    if (!form.title.trim() || !form.date || !form.time) {
-      alert("Fill all fields");
-      return;
+    if (isMentor) {
+      const q = query(collection(db, "sessions"), where("mentorId", "==", user.uid));
+      return onSnapshot(q, (snap) => setSessions(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
     }
+    // students see sessions from mentors they're connected to
+    (async () => {
+      try {
+        const r = await getDocs(query(collection(db, "requests"), where("studentId", "==", user.uid)));
+        const ids = [...new Set(r.docs.map((d) => d.data()).filter((x) => x.status === "accepted").map((x) => x.mentorId))].slice(0, 10);
+        if (!ids.length) return setSessions([]);
+        const s = await getDocs(query(collection(db, "sessions"), where("mentorId", "in", ids)));
+        setSessions(s.docs.map((d) => ({ id: d.id, ...d.data() })));
+      } catch (err) {
+        console.error(err);
+        setSessions([]);
+      }
+    })();
+  }, [user.uid, isMentor]);
 
-    await addDoc(collection(db, "sessions"), {
-      ...form,
-      mentorId: user.uid,
-      mentorName: user.displayName || "Mentor",
-      createdAt: Date.now(),
-    });
+  if (!sessions) return <PageSkeleton />;
 
-    setForm({ title: "", category: "General", date: "", time: "" });
-    setShowForm(false);
+  const today = dayKey();
+  const sorted = [...sessions].sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`));
+  const upcoming = sorted.filter((s) => s.date >= today);
+  const past = sorted.filter((s) => s.date < today).reverse().slice(0, 6);
+
+  const create = async (e) => {
+    e.preventDefault();
+    if (!form.title.trim()) return toast.error("Give the session a title.");
+    if (form.date < today) return toast.error("Pick a date from today onwards.");
+    setSaving(true);
+    try {
+      await addDoc(collection(db, "sessions"), {
+        ...form,
+        title: form.title.trim(),
+        mentorId: user.uid,
+        mentorName: profile.name || user.displayName || "Mentor",
+        createdAt: Date.now(),
+      });
+      toast.success("Session scheduled");
+      setForm({ title: "", category: CATEGORIES[0], date: today, time: "18:00" });
+      setOpen(false);
+    } catch {
+      toast.error("Couldn't create the session.");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  // ---------------------------
-  // Delete session
-  // ---------------------------
-  const deleteSession = async (id) => {
-    if (!window.confirm("Delete this session?")) return;
-    await deleteDoc(doc(db, "sessions", id));
+  const remove = async () => {
+    const s = confirm;
+    setConfirm(null);
+    try {
+      await deleteDoc(doc(db, "sessions", s.id));
+      toast("Session deleted");
+    } catch {
+      toast.error("Couldn't delete.");
+    }
   };
-
-  const filteredSessions = sessions.filter((s) =>
-    s.title.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white p-4 rounded-lg shadow-md flex justify-between items-center">
-        <h1 className="text-3xl font-bold">My Sessions</h1>
+    <div className="mx-auto max-w-3xl">
+      <PageHeader
+        eyebrow="Sessions"
+        title={isMentor ? "Your calendar" : "Sessions from your mentors"}
+        subtitle={isMentor ? "Your students see these on their Today page." : undefined}
+        action={
+          isMentor && (
+            <button onClick={() => setOpen(true)} className="btn-primary">
+              <FiPlus /> New session
+            </button>
+          )
+        }
+      />
 
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="bg-primary text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:scale-105 transition"
-        >
-          <FaPlus /> Create Session
-        </button>
-      </div>
-
-      {/* Create form */}
-      {showForm && (
-        <div className="bg-white p-4 rounded-lg shadow space-y-3">
-          <input
-            placeholder="Session title"
-            value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
-            className="border p-2 rounded w-full"
-          />
-
-          <input
-            placeholder="Category"
-            value={form.category}
-            onChange={(e) => setForm({ ...form, category: e.target.value })}
-            className="border p-2 rounded w-full"
-          />
-
-          <input
-            type="date"
-            value={form.date}
-            onChange={(e) => setForm({ ...form, date: e.target.value })}
-            className="border p-2 rounded w-full"
-          />
-
-          <input
-            type="time"
-            value={form.time}
-            onChange={(e) => setForm({ ...form, time: e.target.value })}
-            className="border p-2 rounded w-full"
-          />
-
-          <button
-            onClick={createSession}
-            className="bg-primary text-white px-4 py-2 rounded hover:scale-105 transition"
-          >
-            Save Session
-          </button>
-        </div>
-      )}
-
-      {/* Search */}
-      <div className="relative w-full md:w-72">
-        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-          <FaSearch />
-        </span>
-        <input
-          placeholder="Search sessions..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10 p-2 border rounded w-full"
+      {upcoming.length === 0 ? (
+        <EmptyState
+          icon="📅"
+          title="Nothing coming up"
+          body={isMentor ? "Schedule a session and your students will see it straight away." : "When your mentor schedules a session, it'll appear here."}
+          action={isMentor && <button onClick={() => setOpen(true)} className="btn-primary"><FiPlus /> New session</button>}
         />
-      </div>
-
-      {/* Sessions grid */}
-      {filteredSessions.length === 0 ? (
-        <p>No sessions created yet.</p>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredSessions.map((session) => (
-            <div
-              key={session.id}
-              className="bg-white rounded-lg shadow-md p-5 hover:shadow-lg transition"
-            >
-              <p className="flex items-center gap-2 text-sm text-gray-600">
-                <FaTag /> {session.category}
-              </p>
-
-              <h3 className="text-xl font-bold mt-2">{session.title}</h3>
-
-              <p className="flex items-center gap-2 mt-2">
-                <FaChalkboardUser /> {session.mentorName}
-              </p>
-
-              <p className="flex items-center gap-2">
-                <FaCalendarDays /> {session.date}
-              </p>
-
-              <p className="flex items-center gap-2">
-                <FaClock /> {session.time}
-              </p>
-
-              <button
-                onClick={() => deleteSession(session.id)}
-                className="mt-4 bg-red-500 text-white px-3 py-2 rounded flex items-center gap-2 hover:bg-red-600"
-              >
-                <FaTrash /> Delete
-              </button>
-            </div>
+        <div className="space-y-3">
+          {upcoming.map((s) => (
+            <SessionCard key={s.id} s={s} onDelete={isMentor ? setConfirm : null} />
           ))}
         </div>
       )}
+
+      {past.length > 0 && (
+        <>
+          <h2 className="mb-3 mt-10 text-sm font-bold uppercase tracking-wider text-muted">Earlier</h2>
+          <div className="space-y-3">
+            {past.map((s) => (
+              <SessionCard key={s.id} s={s} past onDelete={isMentor ? setConfirm : null} />
+            ))}
+          </div>
+        </>
+      )}
+
+      <Modal open={open} onClose={() => setOpen(false)} title="New session">
+        <form onSubmit={create} className="space-y-4">
+          <div>
+            <label className="label" htmlFor="s-title">Title</label>
+            <input id="s-title" autoFocus className="field" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Handling exam stress" />
+          </div>
+          <div>
+            <span className="label">Type</span>
+            <div className="flex flex-wrap gap-2">
+              {CATEGORIES.map((c) => (
+                <button
+                  type="button"
+                  key={c}
+                  onClick={() => setForm({ ...form, category: c })}
+                  className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ring-1 transition ${
+                    form.category === c ? "bg-primary-50 text-primary ring-primary" : "ring-line hover:bg-bg-light-gray"
+                  }`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label" htmlFor="s-date">Date</label>
+              <input id="s-date" type="date" min={today} className="field" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+            </div>
+            <div>
+              <label className="label" htmlFor="s-time">Time</label>
+              <input id="s-time" type="time" className="field" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} />
+            </div>
+          </div>
+          <button disabled={saving} className="btn-primary w-full">
+            {saving && <Spinner />} Schedule
+          </button>
+        </form>
+      </Modal>
+
+      <Modal open={!!confirm} onClose={() => setConfirm(null)} title="Delete this session?">
+        <p className="text-sm text-muted">“{confirm?.title}” will be removed for your students too.</p>
+        <div className="mt-6 flex justify-end gap-2">
+          <button onClick={() => setConfirm(null)} className="btn-ghost">Keep</button>
+          <button onClick={remove} className="btn bg-red-600 text-white hover:bg-red-700">Delete</button>
+        </div>
+      </Modal>
     </div>
   );
 }

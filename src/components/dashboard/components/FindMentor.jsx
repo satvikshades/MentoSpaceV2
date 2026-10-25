@@ -1,250 +1,179 @@
-import { useState, useEffect, useMemo } from "react";
-import { FaSearch, FaStar, FaCheckCircle } from "react-icons/fa";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { EXPERTISE_LABELS, expertiseList } from "../../../lib/people";
+import { Link } from "react-router-dom";
+import toast from "react-hot-toast";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import { sendMentorRequest } from "../../../lib/actions";
+import { FiSearch, FiCheck, FiClock } from "react-icons/fi";
+import { db } from "../../../firebase";
+import { useDashboard } from "../../../lib/useProgress";
+import { Avatar, EmptyState, PageHeader, Skeleton, Spinner } from "../../ui";
 
-import { db, auth } from "../../../firebase";
-import {
-  collection,
-  getDocs,
-  addDoc,
-  query,
-  where,
-  getDoc,
-} from "firebase/firestore";
-
-const StarRating = ({ rating }) => (
-  <div className="flex items-center">
-    {[...Array(5)].map((_, index) => (
-      <FaStar
-        key={index}
-        className={index < rating ? "text-yellow-400" : "text-gray-300"}
-      />
-    ))}
-  </div>
-);
+export function RequestButton({ status, busy, onRequest, className = "" }) {
+  if (status === "accepted")
+    return (
+      <span className={`btn bg-emerald-50 text-emerald-700 ${className}`}>
+        <FiCheck /> Connected
+      </span>
+    );
+  if (status === "pending")
+    return (
+      <span className={`btn bg-amber-50 text-amber-700 ${className}`}>
+        <FiClock /> Request sent
+      </span>
+    );
+  return (
+    <button onClick={onRequest} disabled={busy} className={`btn-primary ${className}`}>
+      {busy && <Spinner />} Ask to connect
+    </button>
+  );
+}
 
 function FindMentor() {
-  const navigate = useNavigate();
-
-  const [allMentors, setAllMentors] = useState([]);
+  const { user } = useDashboard();
+  const [mentors, setMentors] = useState(null);
   const [requests, setRequests] = useState({});
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedExpertise, setSelectedExpertise] = useState("All");
+  const [search, setSearch] = useState("");
+  const [area, setArea] = useState("all");
+  const [busy, setBusy] = useState(null);
 
-  const currentUser = auth.currentUser;
-
-  // -------------------------------------------------------
-  // LOAD MENTORS
-  // -------------------------------------------------------
   useEffect(() => {
-    async function fetchMentors() {
-      const ref = collection(db, "users");
-      const snap = await getDocs(ref);
-
-      const mentors = snap.docs
-        .map((doc) => ({ id: doc.id, ...doc.data() }))
-        .filter((u) => u.role === "mentor");
-
-      setAllMentors(mentors);
-    }
-    fetchMentors();
-  }, []);
-
-  // -------------------------------------------------------
-  // LOAD EXISTING REQUESTS
-  // -------------------------------------------------------
-  useEffect(() => {
-    if (!currentUser) return;
-
-    async function loadRequests() {
-      const q = query(
-        collection(db, "requests"),
-        where("studentId", "==", currentUser.uid)
-      );
-
-      const snap = await getDocs(q);
-
-      const reqMap = {};
-      snap.docs.forEach((d) => {
-        reqMap[d.data().mentorId] = {
-          status: d.data().status,
-          id: d.id,
-        };
-      });
-
-      setRequests(reqMap);
-    }
-
-    loadRequests();
-  }, [currentUser]);
-
-  // -------------------------------------------------------
-  // FILTER OPTIONS
-  // -------------------------------------------------------
-  const allExpertiseAreas = useMemo(() => {
-    const areas = [];
-
-    allMentors.forEach((m) => {
-      if (m.expertise) {
-        if (Array.isArray(m.expertise)) areas.push(...m.expertise);
-        else areas.push(m.expertise);
+    (async () => {
+      try {
+        const [m, r] = await Promise.all([
+          getDocs(query(collection(db, "users"), where("role", "==", "mentor"))),
+          getDocs(query(collection(db, "requests"), where("studentId", "==", user.uid))),
+        ]);
+        setMentors(m.docs.map((d) => ({ id: d.id, ...d.data() })));
+        const map = {};
+        r.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((x) => x.status === "pending" || x.status === "accepted")
+          .forEach((x) => (map[x.mentorId] = x.status));
+        setRequests(map);
+      } catch (err) {
+        console.error(err);
+        setMentors([]);
       }
-    });
+    })();
+  }, [user.uid]);
 
-    return ["All", ...new Set(areas)];
-  }, [allMentors]);
+  const areas = useMemo(() => {
+    const set = new Set();
+    (mentors || []).forEach((m) => expertiseList(m.expertise).forEach((e) => set.add(e.key)));
+    return [...set];
+  }, [mentors]);
 
-  const filteredMentors = useMemo(() => {
-    return allMentors
-      .filter((mentor) =>
-        mentor.name?.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-      .filter((mentor) =>
-        selectedExpertise === "All"
-          ? true
-          : Array.isArray(mentor.expertise)
-          ? mentor.expertise.includes(selectedExpertise)
-          : mentor.expertise === selectedExpertise
-      );
-  }, [allMentors, searchTerm, selectedExpertise]);
+  const shown = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (mentors || [])
+      .filter((m) => !q || `${m.name} ${m.bio || ""}`.toLowerCase().includes(q))
+      .filter((m) => area === "all" || expertiseList(m.expertise).some((e) => e.key === area))
+      .sort((a, b) => (requests[b.id] ? 1 : 0) - (requests[a.id] ? 1 : 0));
+  }, [mentors, search, area, requests]);
 
-  // -------------------------------------------------------
-  // SEND REQUEST
-  // -------------------------------------------------------
-  const sendRequest = async (mentorId) => {
-    if (!currentUser) return alert("Please login first!");
-
-    if (requests[mentorId])
-      return alert("Already requested!");
-
-    await addDoc(collection(db, "requests"), {
-      studentId: currentUser.uid,
-      mentorId,
-      status: "pending",
-      createdAt: new Date(),
-    });
-
-    setRequests((p) => ({
-      ...p,
-      [mentorId]: { status: "pending" },
-    }));
+  const request = async (mentor) => {
+    setBusy(mentor.id);
+    try {
+      await sendMentorRequest(user.uid, mentor.id);
+      setRequests((r) => ({ ...r, [mentor.id]: "pending" }));
+      toast.success(`Request sent to ${mentor.name?.split(" ")[0] || "mentor"}`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Couldn't send the request.");
+    } finally {
+      setBusy(null);
+    }
   };
 
   return (
-    <div className="space-y-6">
-      {/* HEADER */}
-      <div className="bg-white p-4 rounded-lg shadow-md space-y-4">
-        <h1 className="text-3xl font-bold text-gray-800">Find Your Mentor</h1>
-        <p className="text-gray-600">Connect with personal mentors.</p>
+    <div>
+      <PageHeader
+        eyebrow="Mentors"
+        title="Find someone who gets it"
+        subtitle="Mentors here are people who've faced similar things and want to help. Ask to connect, and once they accept you can message them."
+      />
 
-        {/* SEARCH + FILTER */}
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="relative flex-grow">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-              <FaSearch />
-            </span>
-            <input
-              type="text"
-              placeholder="Search by mentor name..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/50"
-            />
-          </div>
-
-          <select
-            value={selectedExpertise}
-            onChange={(e) => setSelectedExpertise(e.target.value)}
-            className="p-2 border border-gray-300 rounded-md focus:ring-primary/50 cursor-pointer"
-          >
-            {allExpertiseAreas.map((area) => (
-              <option key={area} value={area}>
-                {area}
-              </option>
-            ))}
-          </select>
+      <div className="mb-6 space-y-3">
+        <div className="relative">
+          <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name or what they talk about"
+            className="field py-3 pl-11"
+          />
         </div>
+        {areas.length > 0 && (
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+            {["all", ...areas].map((a) => (
+              <button
+                key={a}
+                onClick={() => setArea(a)}
+                className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  area === a ? "bg-ink text-white" : "bg-white text-ink/70 ring-1 ring-line hover:text-ink"
+                }`}
+              >
+                {a === "all" ? "Everyone" : EXPERTISE_LABELS[a] || a}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* MENTOR CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredMentors.map((mentor) => {
-          const req = requests[mentor.id];
-
-          return (
-            <div
-              key={mentor.id}
-              className="bg-white rounded-lg shadow-md p-5 flex flex-col items-center text-center hover:shadow-xl transition-all"
-            >
-              <img
-                src={
-                  mentor.profilePic ||
-                  `https://ui-avatars.com/api/?name=${mentor.name}`
-                }
-                className="w-28 h-28 rounded-full border-4 border-gray-200 mb-3"
-              />
-
-              <h3 className="text-xl font-bold flex items-center gap-2">
-                {mentor.name}
-                <FaCheckCircle className="text-blue-500" />
-              </h3>
-
-              <StarRating rating={mentor.rating || 4} />
-
-              <div className="flex flex-wrap justify-center gap-2 my-3">
-                {(Array.isArray(mentor.expertise)
-                  ? mentor.expertise
-                  : [mentor.expertise]
-                ).map((e) => (
-                  <span
-                    key={e}
-                    className="bg-primary/10 text-primary text-xs px-3 py-1 rounded-full"
-                  >
-                    {e}
-                  </span>
-                ))}
-              </div>
-
-              <p className="text-gray-600 text-sm mb-4">
-                {mentor.bio || "No bio added yet"}
-              </p>
-
-              {/* BUTTONS */}
-              <div className="w-full space-y-2">
-                <button
-                  onClick={() => navigate(`/mentor/${mentor.id}`)}
-                  className="w-full py-2 bg-primary text-white rounded-lg"
-                >
-                  View Profile
-                </button>
-
-                {req?.status === "pending" ? (
-                  <button
-                    disabled
-                    className="w-full py-2 bg-yellow-500 text-white rounded-lg"
-                  >
-                    Pending...
-                  </button>
-                ) : req?.status === "accepted" ? (
-                  <button
-                    disabled
-                    className="w-full py-2 bg-green-600 text-white rounded-lg"
-                  >
-                    Accepted ✔
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => sendRequest(mentor.id)}
-                    className="w-full py-2 bg-violet-600 text-white rounded-lg"
-                  >
-                    Send Request
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      {!mentors ? (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-64" />
+          ))}
+        </div>
+      ) : shown.length === 0 ? (
+        <EmptyState icon="🔍" title="No mentors match that" body="Try a different word or clear the filter." />
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {shown.map((m, i) => {
+            const count = m.myStudents?.length || 0;
+            return (
+              <article
+                key={m.id}
+                className="card flex flex-col p-5 transition hover:-translate-y-0.5 hover:shadow-[0_12px_30px_-12px_rgba(29,31,43,0.18)] animate-rise"
+                style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
+              >
+                <Link to={`/mentor/${m.id}`} className="flex items-center gap-3">
+                  <Avatar person={m} size={56} />
+                  <div className="min-w-0">
+                    <h3 className="truncate text-lg font-bold">{m.name}</h3>
+                    <p className="text-xs text-muted">
+                      {count > 0 ? `Mentoring ${count} ${count === 1 ? "student" : "students"}` : "Open to new students"}
+                    </p>
+                  </div>
+                </Link>
+                <div className="mt-4 flex flex-wrap gap-1.5">
+                  {expertiseList(m.expertise).map((e) => (
+                    <span key={e.key} className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary">
+                      {e.label}
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-3 line-clamp-3 flex-1 text-sm leading-relaxed text-ink/75">
+                  {m.bio || "This mentor hasn't written a bio yet."}
+                </p>
+                <div className="mt-5 grid grid-cols-2 gap-2">
+                  <Link to={`/mentor/${m.id}`} className="btn-ghost text-sm">
+                    Profile
+                  </Link>
+                  <RequestButton
+                    status={requests[m.id]}
+                    busy={busy === m.id}
+                    onRequest={() => request(m)}
+                    className="text-sm"
+                  />
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

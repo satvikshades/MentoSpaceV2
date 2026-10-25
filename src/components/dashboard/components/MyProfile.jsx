@@ -1,289 +1,229 @@
-import { useState, useEffect } from "react";
-import {
-  FaUser,
-  FaEnvelope,
-  FaPen,
-  FaTimes,
-  FaCamera,
-} from "react-icons/fa";
+import { useState } from "react";
+import { EXPERTISE_LABELS, expertiseList } from "../../../lib/people";
+import { Link } from "react-router-dom";
+import toast from "react-hot-toast";
+import { doc, updateDoc } from "firebase/firestore";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { updateProfile } from "firebase/auth";
+import { FiCamera, FiEdit2, FiSettings } from "react-icons/fi";
+import { db, storage } from "../../../firebase";
+import { useDashboard, useProgress } from "../../../lib/useProgress";
+import { Avatar, Spinner } from "../../ui";
 
-import { FaFloppyDisk } from "react-icons/fa6";
-
-import MoodTracker from "./MoodTracker"; // correct path
-
-import { auth, db, storage } from "../../../firebase";
-import {
-  doc,
-  getDoc,
-  updateDoc,
-} from "firebase/firestore";
-import {
-  ref,
-  uploadBytes,
-  getDownloadURL,
-} from "firebase/storage";
-
-function MyProfile() {
-
-  // 🔥 Mood Tracker state
-  const [showMood, setShowMood] = useState(false);
-
-  // Profile states
-  const [isEditing, setIsEditing] = useState(false);
-  const [userDetails, setUserDetails] = useState(null);
-  const [formData, setFormData] = useState(null);
-  const [successMessage, setSuccessMessage] = useState("");
-  const [uploading, setUploading] = useState(false);
-
-  const user = auth.currentUser;
-
-  // -----------------------------------------------------------
-  // LOAD USER DATA
-  // -----------------------------------------------------------
-  useEffect(() => {
-    async function fetchUserData() {
-      if (!user) return;
-
-      const refUser = doc(db, "users", user.uid);
-      const snap = await getDoc(refUser);
-
-      if (snap.exists()) {
-        const data = snap.data();
-        setUserDetails(data);
-        setFormData(data);
-      }
-    }
-
-    fetchUserData();
-  }, [user]);
-
-  // -----------------------------------------------------------
-  // HANDLE PROFILE EDITING
-  // -----------------------------------------------------------
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handleProfilePicUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setUploading(true);
-
-    try {
-      const fileRef = ref(storage, `profilePics/${user.uid}.jpg`);
-      await uploadBytes(fileRef, file);
-
-      const url = await getDownloadURL(fileRef);
-
-      await updateDoc(doc(db, "users", user.uid), {
-        profilePic: url,
-      });
-
-      setUserDetails((prev) => ({ ...prev, profilePic: url }));
-      setFormData((prev) => ({ ...prev, profilePic: url }));
-
-      setSuccessMessage("Profile picture updated!");
-      setTimeout(() => setSuccessMessage(""), 2500);
-    } catch (err) {
-      console.error(err);
-      alert("Upload failed!");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleUpdateProfile = async (e) => {
-    e.preventDefault();
-
-    try {
-      await updateDoc(doc(db, "users", user.uid), {
-        name: formData.name,
-        bio: formData.bio,
-      });
-
-      setUserDetails(formData);
-      setIsEditing(false);
-      setSuccessMessage("Profile updated!");
-      setTimeout(() => setSuccessMessage(""), 3000);
-
-    } catch (err) {
-      console.error(err);
-      alert("Update failed!");
-    }
-  };
-
-  const handleCancelEdit = () => {
-    setFormData(userDetails);
-    setIsEditing(false);
-  };
-
-  if (!userDetails) {
-    return <div className="p-6">Loading profile...</div>;
-  }
+function Badges({ uid }) {
+  const p = useProgress(uid);
+  if (p.loading) return null;
+  const earned = p.milestones.filter((m) => m.earned).length;
 
   return (
-    <div className="space-y-8 relative">
-
-      {/* Floating Mood Button */}
-      <button
-        onClick={() => setShowMood(true)}
-        className="fixed bottom-6 right-6 bg-primary text-white px-4 py-3 rounded-full shadow-lg flex items-center gap-2"
-      >
-        😊 How are you feeling?
-      </button>
-
-      {showMood && <MoodTracker onClose={() => setShowMood(false)} />}
-
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-800">My Profile</h1>
-
-        {successMessage && (
-          <p className="text-green-600 font-medium bg-green-100 px-4 py-2 rounded-md">
-            {successMessage}
-          </p>
-        )}
+    <>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          { label: "Day streak", value: p.streak, icon: "🔥" },
+          { label: "Best streak", value: p.best, icon: "🏔️" },
+          { label: "Check-ins", value: p.moods.length, icon: "💭" },
+          { label: p.level.name, value: `${p.xp} XP`, icon: "🌳" },
+        ].map((s) => (
+          <div key={s.label} className="card p-4">
+            <p className="text-xl">{s.icon}</p>
+            <p className="mt-2 text-2xl font-extrabold">{s.value}</p>
+            <p className="text-xs font-semibold text-muted">{s.label}</p>
+          </div>
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <section className="card p-5 sm:p-6">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-lg font-bold">Badges</h2>
+          <p className="text-sm text-muted">
+            {earned} of {p.milestones.length}
+          </p>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {p.milestones.map((m) => (
+            <div
+              key={m.id}
+              className={`rounded-2xl p-4 text-center transition ${
+                m.earned ? "bg-gradient-to-br from-primary-50 to-white ring-1 ring-primary/20" : "bg-bg-light-gray"
+              }`}
+            >
+              <div className={`mx-auto grid h-12 w-12 place-items-center rounded-full text-2xl ${m.earned ? "bg-white shadow-sm" : "opacity-30 grayscale"}`}>
+                {m.icon}
+              </div>
+              <p className={`mt-2 text-sm font-bold ${m.earned ? "" : "text-muted"}`}>{m.title}</p>
+              <p className="mt-0.5 text-[11px] leading-snug text-muted">{m.hint}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+    </>
+  );
+}
 
-        {/* LEFT SIDE */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-md">
+function MyProfile() {
+  const { user, profile, setProfile, role } = useDashboard();
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ name: profile.name || "", bio: profile.bio || "", expertise: expertiseList(profile.expertise).map((e) => e.key) });
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
-          <div className="flex justify-between items-center mb-6 border-b pb-4">
-            <h2 className="text-xl font-semibold text-gray-700">
-              Personal Information
-            </h2>
+  const upload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return toast.error("Choose an image file.");
+    if (file.size > 5 * 1024 * 1024) return toast.error("That image is over 5 MB.");
+    setUploading(true);
+    try {
+      const r = ref(storage, `profilePics/${user.uid}`);
+      await uploadBytes(r, file, { contentType: file.type });
+      const url = await getDownloadURL(r);
+      await updateDoc(doc(db, "users", user.uid), { profilePic: url });
+      setProfile((p) => ({ ...p, profilePic: url }));
+      toast.success("Photo updated");
+    } catch (err) {
+      console.error(err);
+      toast.error("Upload failed. Try a smaller image.");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
 
-            {!isEditing && (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-lg"
-              >
-                <FaPen />
-                Edit Profile
-              </button>
-            )}
+  const save = async (e) => {
+    e.preventDefault();
+    if (!form.name.trim()) return toast.error("Your name can't be empty.");
+    setSaving(true);
+    try {
+      const patch = { name: form.name.trim(), bio: form.bio.trim() };
+      if (role === "mentor") patch.expertise = form.expertise;
+      await updateDoc(doc(db, "users", user.uid), patch);
+      if (patch.name !== user.displayName) await updateProfile(user, { displayName: patch.name }).catch(() => {});
+      setProfile((p) => ({ ...p, ...patch }));
+      setEditing(false);
+      toast.success("Profile saved");
+    } catch (err) {
+      console.error(err);
+      toast.error("Couldn't save your profile.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleArea = (k) =>
+    setForm((f) => ({ ...f, expertise: f.expertise.includes(k) ? f.expertise.filter((x) => x !== k) : [...f.expertise, k] }));
+
+  return (
+    <div className="mx-auto max-w-4xl space-y-5">
+      <section className="card overflow-hidden">
+        <div className="h-24 bg-gradient-to-r from-primary to-secondary sm:h-32" />
+        <div className="px-5 pb-6 sm:px-8">
+          <div className="-mt-12 flex items-end justify-between gap-4">
+            <label className="group relative cursor-pointer" title="Change photo">
+              <Avatar person={profile} size={96} className="ring-4 ring-white" />
+              <span className="absolute bottom-1 right-1 grid h-8 w-8 place-items-center rounded-full bg-ink text-white ring-2 ring-white transition group-hover:bg-primary">
+                {uploading ? <Spinner className="h-3.5 w-3.5" /> : <FiCamera className="h-3.5 w-3.5" />}
+              </span>
+              <input type="file" accept="image/*" className="sr-only" onChange={upload} disabled={uploading} />
+            </label>
+            <div className="flex gap-2">
+              <Link to="/dashboard/settings" className="btn-ghost px-3 lg:hidden" aria-label="Settings">
+                <FiSettings />
+              </Link>
+              {!editing && (
+                <button onClick={() => setEditing(true)} className="btn-ghost">
+                  <FiEdit2 /> Edit
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* Edit Mode */}
-          {isEditing ? (
-            <form onSubmit={handleUpdateProfile} className="space-y-6">
-
-              {/* Profile image */}
-              <div className="relative inline-block">
-                <img
-                  src={formData.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name)}`}
-                  alt="Profile"
-                  className="w-24 h-24 rounded-full object-cover shadow-md"
-                />
-
-                <label className="absolute bottom-0 right-0 bg-primary text-white p-2 rounded-full cursor-pointer">
-                  <FaCamera />
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleProfilePicUpload}
-                  />
+          {editing ? (
+            <form onSubmit={save} className="mt-5 space-y-4 animate-rise">
+              <div>
+                <label className="label" htmlFor="p-name">Name</label>
+                <input id="p-name" className="field" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} maxLength={50} />
+              </div>
+              <div>
+                <label className="label" htmlFor="p-bio">
+                  {role === "mentor" ? "What you can help with" : "A bit about you"}
                 </label>
-              </div>
-
-              {uploading && <p className="text-sm text-blue-500">Uploading...</p>}
-
-              {/* Name */}
-              <div>
-                <label className="block text-sm mb-1">Full Name</label>
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded"
-                />
-              </div>
-
-              {/* Bio */}
-              <div>
-                <label className="block text-sm mb-1">About Me</label>
                 <textarea
-                  name="bio"
-                  rows="3"
-                  value={formData.bio || ""}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded"
+                  id="p-bio"
+                  rows={4}
+                  className="field resize-none"
+                  value={form.bio}
+                  onChange={(e) => setForm({ ...form, bio: e.target.value })}
+                  maxLength={400}
+                  placeholder={
+                    role === "mentor"
+                      ? "e.g. I dealt with exam anxiety through engineering and now help others find routines that work."
+                      : "Anything you'd like a mentor to know. Keep it as short as you like."
+                  }
                 />
+                <p className="mt-1 text-right text-xs text-muted">{form.bio.length}/400</p>
               </div>
-
-              <div className="flex justify-end gap-3">
+              {role === "mentor" && (
+                <div>
+                  <span className="label">Areas</span>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(EXPERTISE_LABELS).map(([k, label]) => (
+                      <button
+                        type="button"
+                        key={k}
+                        onClick={() => toggleArea(k)}
+                        className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ring-1 transition ${
+                          form.expertise.includes(k) ? "bg-primary-50 text-primary ring-primary" : "ring-line hover:bg-bg-light-gray"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={handleCancelEdit}
-                  className="px-6 py-2 bg-gray-200 rounded-lg flex items-center gap-2"
+                  onClick={() => {
+                    setEditing(false);
+                    setForm({ name: profile.name || "", bio: profile.bio || "", expertise: expertiseList(profile.expertise).map((e) => e.key) });
+                  }}
+                  className="btn-ghost"
                 >
-                  <FaTimes /> Cancel
+                  Cancel
                 </button>
-
-                <button
-                  type="submit"
-                  className="px-6 py-2 bg-primary text-white rounded-lg flex items-center gap-2"
-                >
-                  <FaFloppyDisk /> Save
+                <button disabled={saving} className="btn-primary">
+                  {saving && <Spinner />} Save
                 </button>
               </div>
-
             </form>
           ) : (
-            // View Mode
-            <div className="space-y-6">
-              <div className="flex items-center gap-6">
-                <img
-                  src={userDetails.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(userDetails.name)}`}
-                  className="w-24 h-24 rounded-full object-cover shadow-md"
-                />
-
-                <div>
-                  <p className="text-sm text-gray-500">Full Name</p>
-                  <h3 className="text-2xl font-bold">{userDetails.name}</h3>
-
-                  <p className="text-sm text-gray-500 mt-2">Email</p>
-                  <p>{userDetails.email}</p>
+            <div className="mt-4">
+              <h1 className="text-2xl font-extrabold sm:text-3xl">{profile.name || "Add your name"}</h1>
+              <p className="mt-0.5 text-sm text-muted">
+                <span className="capitalize">{role}</span> · {profile.email || user.email}
+              </p>
+              {role === "mentor" && expertiseList(profile.expertise).length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {expertiseList(profile.expertise).map((e) => (
+                    <span key={e.key} className="rounded-full bg-primary-50 px-3 py-1 text-xs font-semibold text-primary">
+                      {e.label}
+                    </span>
+                  ))}
                 </div>
-              </div>
-
-              <div>
-                <h4 className="font-semibold text-gray-500">About Me</h4>
-                <p className="bg-gray-50 p-4 rounded-md">
-                  {userDetails.bio || "No bio added yet."}
-                </p>
-              </div>
+              )}
+              <p className={`mt-4 max-w-2xl whitespace-pre-line leading-relaxed ${profile.bio ? "text-ink/80" : "text-muted"}`}>
+                {profile.bio ||
+                  (role === "mentor"
+                    ? "Add a short bio so students know what you can help with."
+                    : "You haven't written anything about yourself yet.")}
+              </p>
             </div>
           )}
-
         </div>
+      </section>
 
-        {/* RIGHT SIDE */}
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h2 className="text-xl font-semibold mb-6 border-b pb-4">
-            Attended Sessions
-          </h2>
-
-          <div className="space-y-4 max-h-[450px] overflow-y-auto pr-2">
-            {[1,2,3].map((n) => (
-              <div key={n} className="p-4 border rounded-lg">
-                <h3 className="font-bold">Example session {n}</h3>
-                <p className="text-sm text-gray-600">Mentor: Someone</p>
-                <p className="text-sm text-gray-600">Date: 2025-10-12</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-      </div>
+      {role !== "mentor" && <Badges uid={user.uid} />}
     </div>
   );
 }
