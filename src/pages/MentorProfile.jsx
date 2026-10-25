@@ -9,6 +9,7 @@ import { useDashboard } from "../lib/useProgress";
 import { Avatar, PageSkeleton } from "../components/ui";
 import { RequestButton } from "../components/dashboard/components/FindMentor";
 import { sendMentorRequest } from "../lib/actions";
+import { qualificationLabel } from "../lib/legal";
 
 function MentorProfile() {
   const { id } = useParams();
@@ -99,7 +100,10 @@ function MentorProfile() {
 
           <h1 className="mt-4 text-3xl font-extrabold">{mentor.name}</h1>
           <p className="mt-1 text-sm text-muted">
-            Mentor{count > 0 ? ` · ${count} ${count === 1 ? "student" : "students"}` : ""}
+            {qualificationLabel(mentor.mentorDetails?.qualification) || "Mentor"}
+            {mentor.mentorDetails?.rciNumber ? ` · RCI ${mentor.mentorDetails.rciNumber}` : ""}
+            {mentor.mentorDetails?.experienceYears ? ` · ${mentor.mentorDetails.experienceYears} yrs experience` : ""}
+            {count > 0 ? ` · ${count} ${count === 1 ? "student" : "students"}` : ""}
           </p>
 
           <div className="mt-4 flex flex-wrap gap-2">

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
-import { auth, createUserDoc, db, googleProvider, signInWithEmailAndPassword, signInWithPopup } from "../firebase";
+import { auth, db, googleProvider, signInWithEmailAndPassword, signInWithPopup, signOut } from "../firebase";
 import AuthShell, { Divider, GoogleIcon, PasswordInput } from "../components/AuthShell";
 import { Spinner } from "../components/ui";
 
@@ -49,7 +49,7 @@ function Signin() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => onAuthStateChanged(auth, (u) => u && navigate(next, { replace: true })), [navigate, next]);
+  useEffect(() => onAuthStateChanged(auth, (u) => u && !window.__msSigningIn && navigate(next, { replace: true })), [navigate, next]);
 
   const update = (e) => {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
@@ -73,16 +73,21 @@ function Signin() {
   const google = async () => {
     setError("");
     setLoading(true);
+    window.__msSigningIn = true;
     try {
       const { user } = await signInWithPopup(auth, googleProvider);
       const snap = await getDoc(doc(db, "users", user.uid));
       if (!snap.exists()) {
-        await createUserDoc(user.uid, { name: user.displayName || "", email: user.email, role: "student", expertise: "" });
+        // New Google users must go through sign-up and consent first.
+        await signOut(auth);
+        navigate("/register", { replace: true, state: { notice: "You don't have an account yet. Sign up below. It only takes a minute." } });
+        return;
       }
       navigate(next, { replace: true });
     } catch (err) {
       setError(ERRORS[err.code] ?? "Google sign-in didn't work. Try again.");
     } finally {
+      window.__msSigningIn = false;
       setLoading(false);
     }
   };
@@ -119,6 +124,9 @@ function Signin() {
         <Link to="/register" className="font-semibold text-primary hover:underline">
           Create an account
         </Link>
+      </p>
+      <p className="mt-3 text-center text-xs text-muted">
+        <Link to="/privacy" className="hover:text-ink hover:underline">Privacy and consent</Link>
       </p>
     </AuthShell>
   );
