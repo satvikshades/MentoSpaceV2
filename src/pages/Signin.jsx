@@ -1,160 +1,39 @@
-import React, { useState } from "react";
-import { FaEnvelope, FaLock, FaGoogle } from "react-icons/fa";
-import {
-  auth,
-  signInWithEmailAndPassword,
-  googleProvider,
-  signInWithPopup,
-} from "../firebase";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, createUserDoc, db, googleProvider, signInWithEmailAndPassword, signInWithPopup } from "../firebase";
+import AuthShell, { Divider, GoogleIcon, PasswordInput } from "../components/AuthShell";
+import { Spinner } from "../components/ui";
 
-function Signin() {
-  const navigate = useNavigate();
+const ERRORS = {
+  "auth/invalid-credential": "That email and password don't match.",
+  "auth/wrong-password": "That email and password don't match.",
+  "auth/user-not-found": "There's no account with that email.",
+  "auth/invalid-email": "That doesn't look like an email address.",
+  "auth/too-many-requests": "Too many tries. Wait a minute, or reset your password.",
+  "auth/network-request-failed": "You seem to be offline.",
+  "auth/popup-closed-by-user": "",
+  "auth/cancelled-popup-request": "",
+};
 
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-  });
-
-  const [isLoading, setIsLoading] = useState(false);
-  const [apiError, setApiError] = useState("");
-
-  const handleInputChange = (e) => {
-    const { id, value } = e.target;
-    setFormData((prev) => ({ ...prev, [id]: value }));
-    if (apiError) setApiError("");
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setApiError("");
-
-    if (!formData.email || !formData.password) {
-      setApiError("Email and password are required.");
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      await signInWithEmailAndPassword(
-        auth,
-        formData.email,
-        formData.password
-      );
-
-      // ❌ No window.location.href (causes refresh)
-      // ✅ Use navigate
-      navigate("/dashboard/profile", { replace: true });
-
-    } catch (error) {
-      let message = "Login failed.";
-
-      if (error.code === "auth/user-not-found") message = "User not found.";
-      else if (error.code === "auth/wrong-password")
-        message = "Incorrect password.";
-      else if (error.code === "auth/invalid-email")
-        message = "Invalid email format.";
-
-      setApiError(message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    setApiError("");
-    setIsLoading(true);
-
-    try {
-      await signInWithPopup(auth, googleProvider);
-      navigate("/dashboard/profile", { replace: true });
-
-    } catch (error) {
-      setApiError("Google login failed.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
+function Side() {
   return (
-    <div className="min-h-screen font-poppins bg-bg-light-gray flex">
-      <div className="hidden lg:flex w-1/2 flex-col items-center justify-center bg-gradient-to-br from-primary to-secondary text-white p-12 text-center">
-        <h1 className="font-montserrat text-5xl font-bold leading-tight">
-          Welcome Back
-        </h1>
-        <p className="mt-4 max-w-md text-lg opacity-90">
-          Log in to reconnect with the community.
-        </p>
-      </div>
-
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-8">
-        <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-8">
-          <div className="space-y-6">
-            <div>
-              <h2 className="font-montserrat text-3xl font-bold text-gray-800">
-                Log In
-              </h2>
-              <p className="text-gray-500 mt-2">
-                Enter your details to continue.
-              </p>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <InputField
-                id="email"
-                type="email"
-                placeholder="Email"
-                value={formData.email}
-                onChange={handleInputChange}
-                icon={<FaEnvelope />}
-              />
-
-              <InputField
-                id="password"
-                type="password"
-                placeholder="Password"
-                value={formData.password}
-                onChange={handleInputChange}
-                icon={<FaLock />}
-              />
-
-              {apiError && (
-                <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg text-center">
-                  {apiError}
-                </p>
-              )}
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-3 px-4 font-bold text-white bg-gradient-to-r from-primary to-secondary rounded-lg"
-              >
-                {isLoading ? "Logging In..." : "Log In"}
-              </button>
-            </form>
-
-            <div className="relative flex items-center py-2">
-              <div className="flex-grow border-t border-gray-300"></div>
-              <span className="flex-shrink mx-4 text-sm text-gray-400">OR</span>
-              <div className="flex-grow border-t border-gray-300"></div>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleGoogleLogin}
-              className="w-full flex items-center justify-center gap-3 py-2.5 px-4 font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg"
-            >
-              <FaGoogle className="text-red-500" />
-              Log In with Google
-            </button>
-
-            <p className="text-center text-sm text-gray-500 pt-2">
-              Don’t have an account?
-              <Link to="/register" className="font-semibold text-primary">
-                {" "}Register here
-              </Link>
-            </p>
+    <div>
+      <p className="font-serif text-[34px] italic leading-[1.15] text-white/95">
+        Five seconds a day is enough to start noticing what helps.
+      </p>
+      <div className="mt-10 max-w-sm rounded-2xl bg-white/[0.06] p-5 ring-1 ring-white/10 backdrop-blur">
+        <div className="flex items-center justify-between text-sm text-white/60">
+          <span>Your streak</span>
+          <span>This week</span>
+        </div>
+        <div className="mt-2 flex items-end justify-between">
+          <p className="text-4xl font-extrabold">🔥 12</p>
+          <div className="flex gap-1.5">
+            {[1, 1, 1, 1, 1, 0, 0].map((d, i) => (
+              <span key={i} className={`h-7 w-4 rounded-md ${d ? "bg-gradient-to-b from-primary to-secondary" : "bg-white/10"}`} />
+            ))}
           </div>
         </div>
       </div>
@@ -162,21 +41,87 @@ function Signin() {
   );
 }
 
-const InputField = ({ id, type, placeholder, value, onChange, icon }) => (
-  <div className="relative">
-    <span className="absolute inset-y-0 left-0 flex items-center pl-4">
-      {icon}
-    </span>
-    <input
-      type={type}
-      id={id}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      required
-      className="w-full pl-12 pr-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none"
-    />
-  </div>
-);
+function Signin() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const next = location.state?.from || "/dashboard";
+  const [form, setForm] = useState({ email: "", password: "" });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => onAuthStateChanged(auth, (u) => u && navigate(next, { replace: true })), [navigate, next]);
+
+  const update = (e) => {
+    setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+    if (error) setError("");
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!form.email || !form.password) return setError("Enter your email and password.");
+    setLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, form.email.trim(), form.password);
+      navigate(next, { replace: true });
+    } catch (err) {
+      setError(ERRORS[err.code] ?? "Couldn't log you in. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const google = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const { user } = await signInWithPopup(auth, googleProvider);
+      const snap = await getDoc(doc(db, "users", user.uid));
+      if (!snap.exists()) {
+        await createUserDoc(user.uid, { name: user.displayName || "", email: user.email, role: "student", expertise: "" });
+      }
+      navigate(next, { replace: true });
+    } catch (err) {
+      setError(ERRORS[err.code] ?? "Google sign-in didn't work. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <AuthShell title="Welcome back" subtitle="Pick up where you left off." side={<Side />}>
+      <button onClick={google} disabled={loading} className="btn-ghost w-full py-3">
+        <GoogleIcon /> Continue with Google
+      </button>
+      <div className="my-6">
+        <Divider />
+      </div>
+      <form onSubmit={submit} className="space-y-4" noValidate>
+        <div>
+          <label className="label" htmlFor="email">Email</label>
+          <input id="email" name="email" type="email" autoComplete="email" value={form.email} onChange={update} className="field" placeholder="you@example.com" />
+        </div>
+        <div>
+          <div className="flex items-baseline justify-between">
+            <label className="label" htmlFor="password">Password</label>
+            <Link to="/forgot-password" className="text-[13px] font-semibold text-primary hover:underline">
+              Forgot it?
+            </Link>
+          </div>
+          <PasswordInput id="password" value={form.password} onChange={update} />
+        </div>
+        {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700 animate-fade">{error}</p>}
+        <button type="submit" disabled={loading} className="btn-primary w-full py-3">
+          {loading && <Spinner />} Log in
+        </button>
+      </form>
+      <p className="mt-8 text-center text-sm text-muted">
+        New here?{" "}
+        <Link to="/register" className="font-semibold text-primary hover:underline">
+          Create an account
+        </Link>
+      </p>
+    </AuthShell>
+  );
+}
 
 export default Signin;

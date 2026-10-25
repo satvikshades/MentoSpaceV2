@@ -1,190 +1,96 @@
-import React, { useState } from "react";
-// Import icons from react-icons
-import { FaLock, FaEye, FaEyeSlash, FaCheckCircle } from "react-icons/fa";
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { confirmPasswordReset, verifyPasswordResetCode } from "firebase/auth";
+import { FiCheck } from "react-icons/fi";
+import { auth } from "../firebase";
+import AuthShell, { FieldError, PasswordInput } from "../components/AuthShell";
+import { Spinner } from "../components/ui";
 
-// This is a placeholder for a routing library component
-const Link = ({ href, children, className }) => (
-  <a href={href} className={className}>
-    {children}
-  </a>
-);
-
+/** Handles Firebase's reset link when the action URL points here (?oobCode=...). */
 function ResetPassword() {
-  // State for password inputs
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [params] = useSearchParams();
+  const code = params.get("oobCode");
+  const [state, setState] = useState(code ? "checking" : "nocode");
+  const [email, setEmail] = useState("");
+  const [pw, setPw] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  // State for toggling password visibility
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  useEffect(() => {
+    if (!code) return;
+    verifyPasswordResetCode(auth, code)
+      .then((e) => {
+        setEmail(e);
+        setState("form");
+      })
+      .catch(() => setState("expired"));
+  }, [code]);
 
-  // State for validation and API submission
-  const [errors, setErrors] = useState({});
-  const [isLoading, setIsLoading] = useState(false);
-  const [apiSuccess, setApiSuccess] = useState(false); // Use boolean to switch views
-
-  const validateForm = () => {
-    const newErrors = {};
-    const specialCharRegex = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+/;
-
-    if (!password) {
-      newErrors.password = "Password is required.";
-    } else if (password.length < 8) {
-      newErrors.password = "Password must be at least 8 characters long.";
-    } else if (!specialCharRegex.test(password)) {
-      newErrors.password = "Password must contain a special character.";
-    }
-
-    if (password !== confirmPassword) {
-      newErrors.confirmPassword = "Passwords do not match.";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e) => {
+  const submit = async (e) => {
     e.preventDefault();
-    if (!validateForm()) return;
-
-    setIsLoading(true);
-    // In a real app, you would also send the reset token from the URL
-    console.log("Submitting new password...");
-    await new Promise((resolve) => setTimeout(resolve, 1500)); // Simulate network delay
-
-    // On successful API call:
-    setApiSuccess(true);
-    setIsLoading(false);
+    if (pw.length < 8) return setError("Use at least 8 characters.");
+    if (pw !== confirm) return setError("The passwords don't match.");
+    setLoading(true);
+    try {
+      await confirmPasswordReset(auth, code, pw);
+      setState("done");
+    } catch {
+      setState("expired");
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const side = <p className="font-serif text-[34px] italic leading-[1.15] text-white/95">A fresh start, for your password at least.</p>;
+
+  if (state === "checking")
+    return (
+      <AuthShell title="One moment" side={side}>
+        <Spinner className="h-6 w-6 text-primary" />
+      </AuthShell>
+    );
+
+  if (state === "nocode" || state === "expired")
+    return (
+      <AuthShell
+        title={state === "expired" ? "This link has expired" : "Use the link from your email"}
+        subtitle={state === "expired" ? "Reset links only work once and for a short time." : "Open the reset link we emailed you to choose a new password."}
+        side={side}
+      >
+        <Link to="/forgot-password" className="btn-primary w-full py-3">Send a new link</Link>
+      </AuthShell>
+    );
+
+  if (state === "done")
+    return (
+      <AuthShell title="Password updated" side={side}>
+        <div className="grid h-14 w-14 place-items-center rounded-2xl bg-emerald-50 text-2xl text-emerald-600 animate-pop">
+          <FiCheck />
+        </div>
+        <p className="mt-5 text-[15px] text-ink/80">You can log in with your new password now.</p>
+        <Link to="/login" className="btn-primary mt-8 w-full py-3">Log in</Link>
+      </AuthShell>
+    );
 
   return (
-    <div className="min-h-screen font-poppins bg-bg-light-gray flex">
-      {/* Left Panel - Branding */}
-      <div className="hidden lg:flex w-1/2 flex-col items-center justify-center bg-gradient-to-br from-primary to-secondary text-white p-12 text-center">
-        <h1 className="font-montserrat text-5xl font-bold leading-tight">
-          Secure Your Account
-        </h1>
-        <p className="mt-4 max-w-md text-lg opacity-90">
-          Choose a strong, new password to keep your account safe.
-        </p>
-        <div className="absolute bottom-10">
-          <Link href="index.html" className="text-center group">
-            <p className="font-montserrat text-3xl font-bold group-hover:text-gray-200 transition-colors">
-              MentoSpace<span className="text-white">.</span>
-            </p>
-            <p className="text-sm opacity-90 tracking-wide">
-              Building strong individuals
-            </p>
-          </Link>
+    <AuthShell title="Choose a new password" subtitle={`For ${email}`} side={side}>
+      <form onSubmit={submit} className="space-y-4" noValidate>
+        <div>
+          <label className="label" htmlFor="pw">New password</label>
+          <PasswordInput id="pw" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" placeholder="At least 8 characters" />
         </div>
-      </div>
-
-      {/* Right Panel - Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-8">
-        <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-8">
-          {apiSuccess ? (
-            // Success View
-            <div className="text-center space-y-4">
-              <FaCheckCircle className="h-16 w-16 text-green-500 mx-auto" />
-              <h2 className="font-montserrat text-2xl font-bold text-gray-800">
-                Password Reset!
-              </h2>
-              <p className="text-gray-600">
-                Your password has been changed successfully. You can now log in
-                with your new password.
-              </p>
-              <Link
-                href="login.html"
-                className="inline-block w-full py-3 px-4 font-bold text-white bg-gradient-to-r from-primary to-secondary rounded-lg transform hover:-translate-y-0.5 transition-all duration-300"
-              >
-                Proceed to Login
-              </Link>
-            </div>
-          ) : (
-            // Form View
-            <div className="space-y-6">
-              <div className="text-center">
-                <h2 className="font-montserrat text-3xl font-bold text-gray-800">
-                  Create New Password
-                </h2>
-                <p className="text-gray-500 mt-2">
-                  Your new password must be different from previous ones.
-                </p>
-              </div>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <PasswordField
-                  id="password"
-                  placeholder="New Password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  showPassword={showPassword}
-                  onToggleShowPassword={() => setShowPassword(!showPassword)}
-                  error={errors.password}
-                />
-                <PasswordField
-                  id="confirmPassword"
-                  placeholder="Confirm New Password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  showPassword={showConfirmPassword}
-                  onToggleShowPassword={() =>
-                    setShowConfirmPassword(!showConfirmPassword)
-                  }
-                  error={errors.confirmPassword}
-                />
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full py-3 px-4 font-bold text-white bg-gradient-to-r from-primary to-secondary rounded-lg transform hover:-translate-y-0.5 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-secondary disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isLoading ? "Resetting..." : "Reset Password"}
-                </button>
-              </form>
-            </div>
-          )}
+        <div>
+          <label className="label" htmlFor="pw2">Repeat it</label>
+          <PasswordInput id="pw2" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" placeholder="" />
+          <FieldError>{error}</FieldError>
         </div>
-      </div>
-    </div>
+        <button disabled={loading} className="btn-primary w-full py-3">
+          {loading && <Spinner />} Save password
+        </button>
+      </form>
+    </AuthShell>
   );
 }
-
-// Reusable Password Field Component with Visibility Toggle
-const PasswordField = ({
-  id,
-  placeholder,
-  value,
-  onChange,
-  showPassword,
-  onToggleShowPassword,
-  error,
-}) => (
-  <div>
-    <div className="relative">
-      <span className="absolute inset-y-0 left-0 flex items-center pl-4">
-        <FaLock className="h-5 w-5 text-gray-400" />
-      </span>
-      <input
-        type={showPassword ? "text" : "password"}
-        id={id}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        className={`w-full pl-12 pr-12 py-2.5 bg-gray-50 border rounded-lg focus:outline-none focus:ring-2 transition duration-300 ${
-          error
-            ? "border-red-500 focus:ring-red-500"
-            : "border-gray-300 focus:ring-primary"
-        }`}
-      />
-      <button
-        type="button"
-        onClick={onToggleShowPassword}
-        className="absolute inset-y-0 right-0 flex items-center pr-4 text-gray-500 hover:text-primary"
-      >
-        {showPassword ? <FaEyeSlash /> : <FaEye />}
-      </button>
-    </div>
-    {error && <p className="text-red-600 text-xs mt-1 ml-1">{error}</p>}
-  </div>
-);
 
 export default ResetPassword;

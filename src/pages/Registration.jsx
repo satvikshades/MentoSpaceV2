@@ -1,298 +1,228 @@
-import React, { useState } from "react";
-import {
-  FaUser,
-  FaEnvelope,
-  FaLock,
-  FaGraduationCap,
-  FaBriefcase,
-} from "react-icons/fa";
-
+import { useState } from "react";
+import { EXPERTISE_LABELS } from "../lib/people";
+import { Link, useNavigate } from "react-router-dom";
+import { doc, getDoc } from "firebase/firestore";
 import {
   auth,
-  createUserWithEmailAndPassword,
-  sendEmailVerification,
-  updateProfile,
-  googleProvider,
-  signInWithPopup,
   createUserDoc,
+  createUserWithEmailAndPassword,
+  db,
+  googleProvider,
+  sendEmailVerification,
+  signInWithPopup,
+  updateProfile,
 } from "../firebase";
+import AuthShell, { Divider, FieldError, GoogleIcon, PasswordInput } from "../components/AuthShell";
+import { Spinner } from "../components/ui";
 
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "../firebase";
+const ERRORS = {
+  "auth/email-already-in-use": "There's already an account with that email. Try logging in.",
+  "auth/invalid-email": "That doesn't look like an email address.",
+  "auth/weak-password": "Pick a stronger password.",
+  "auth/network-request-failed": "You seem to be offline.",
+  "auth/popup-closed-by-user": "",
+  "auth/cancelled-popup-request": "",
+};
 
-import InputField from "../components/common/InputField";
-import { FaGoogle } from "react-icons/fa";
-import RoleRadioButton from "../components/RoleRadioButton";
+const ROLES = [
+  { key: "student", title: "I'm looking for support", body: "Check in daily, build habits, talk to a mentor." },
+  { key: "mentor", title: "I want to mentor", body: "Help people through things you've been through." },
+];
 
-import { Link } from "react-router-dom"; // 🔥 FIXED
+function strength(pw) {
+  let s = 0;
+  if (pw.length >= 8) s += 1;
+  if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) s += 1;
+  if (/\d/.test(pw)) s += 1;
+  if (/[^A-Za-z0-9]/.test(pw)) s += 1;
+  return s;
+}
+
+function Side() {
+  return (
+    <div className="space-y-4">
+      <p className="font-serif text-[34px] italic leading-[1.15] text-white/95">
+        You don't need to have it figured out to start.
+      </p>
+      <ul className="space-y-3 pt-6 text-[15px] text-white/75">
+        <li className="flex gap-3"><span className="text-secondary">01</span> Say how you feel. One tap.</li>
+        <li className="flex gap-3"><span className="text-secondary">02</span> Pick one small habit.</li>
+        <li className="flex gap-3"><span className="text-secondary">03</span> Talk to someone who gets it.</li>
+      </ul>
+    </div>
+  );
+}
 
 function Registration() {
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-    role: "student",
-    expertise: "",
-  });
-
+  const navigate = useNavigate();
+  const [role, setRole] = useState("student");
+  const [form, setForm] = useState({ name: "", email: "", password: "", expertise: [] });
   const [errors, setErrors] = useState({});
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState("");
+  const score = strength(form.password);
 
-  const handleInputChange = (e) => {
+  const update = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: null }));
-    }
+    setForm((f) => ({ ...f, [name]: value }));
+    if (errors[name]) setErrors((x) => ({ ...x, [name]: null }));
+    if (apiError) setApiError("");
   };
 
-  const handleRoleChange = (e) => {
-    const { value } = e.target;
-    setFormData((prev) => ({ ...prev, role: value, expertise: "" }));
+  const toggleArea = (k) =>
+    setForm((f) => ({ ...f, expertise: f.expertise.includes(k) ? f.expertise.filter((x) => x !== k) : [...f.expertise, k] }));
+
+  const validate = () => {
+    const e = {};
+    if (!form.name.trim()) e.name = "What should we call you? A first name or nickname is fine.";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim())) e.email = "Enter a valid email address.";
+    if (form.password.length < 8) e.password = "Use at least 8 characters.";
+    if (role === "mentor" && form.expertise.length === 0) e.expertise = "Pick at least one area.";
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
-  const validateForm = () => {
-    const newErrors = {};
-    const { name, email, password, confirmPassword, role, expertise } = formData;
-
-    if (!name) newErrors.name = "Name is required.";
-
-    const emailRegex = /^[^\s@]+@(gmail|hotmail|yahoo)\.com$/;
-    if (!email) newErrors.email = "Email is required.";
-    else if (!emailRegex.test(email))
-      newErrors.email = "Please use Gmail, Hotmail, or Yahoo.";
-
-    const specialCharRegex = /[!@#$%^&*]/;
-    if (!password) newErrors.password = "Password is required.";
-    else if (password.length < 8)
-      newErrors.password = "Password must be at least 8 characters.";
-    else if (!specialCharRegex.test(password))
-      newErrors.password = "Password must contain a special character.";
-
-    if (password !== confirmPassword)
-      newErrors.confirmPassword = "Passwords do not match.";
-
-    if (role === "mentor" && !expertise)
-      newErrors.expertise = "Please select your expertise.";
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  // 🔥 FIREBASE REGISTRATION
-  const handleSubmit = async (e) => {
+  const submit = async (e) => {
     e.preventDefault();
-    setApiError("");
-
-    if (!validateForm()) return;
-
-    setIsLoading(true);
-
+    if (!validate()) return;
+    setLoading(true);
     try {
-      const cred = await createUserWithEmailAndPassword(
-        auth,
-        formData.email,
-        formData.password
-      );
-
-      if (formData.name) {
-        await updateProfile(cred.user, { displayName: formData.name });
-      }
-
+      const cred = await createUserWithEmailAndPassword(auth, form.email.trim(), form.password);
+      await updateProfile(cred.user, { displayName: form.name.trim() });
       await createUserDoc(cred.user.uid, {
-        name: formData.name,
-        email: formData.email,
-        role: formData.role,
-        expertise: formData.expertise || "",
+        name: form.name.trim(),
+        email: form.email.trim(),
+        role,
+        expertise: role === "mentor" ? form.expertise : "",
       });
-
-      localStorage.setItem("ms_user_role", formData.role);
-
-      await sendEmailVerification(cred.user);
-
-      alert("Registration successful! Please verify your email.");
-
-      window.location.href = "/login"; // 🔥 FIXED ROUTE
-      return;
+      sendEmailVerification(cred.user).catch(() => {});
+      navigate("/dashboard", { replace: true });
     } catch (err) {
-      console.error("Registration error:", err);
-      setApiError(err.message || "Registration failed.");
+      setApiError(ERRORS[err.code] ?? "Couldn't create your account. Try again.");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  // 🔥 GOOGLE REGISTER
-  const handleGoogleRegister = async () => {
+  const google = async () => {
+    if (role === "mentor" && form.expertise.length === 0) {
+      setErrors({ expertise: "Pick at least one area first." });
+      return;
+    }
     setApiError("");
-    setIsLoading(true);
-
+    setLoading(true);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
-
-      const ref = doc(db, "users", user.uid);
-      const snap = await getDoc(ref);
-
+      const { user } = await signInWithPopup(auth, googleProvider);
+      const snap = await getDoc(doc(db, "users", user.uid));
       if (!snap.exists()) {
         await createUserDoc(user.uid, {
           name: user.displayName || "",
           email: user.email,
-          role: "student",
-          expertise: "",
+          role,
+          expertise: role === "mentor" ? form.expertise : "",
         });
       }
-
-      window.location.href = "/dashboard/profile"; // 🔥 FIXED
+      navigate("/dashboard", { replace: true });
     } catch (err) {
-      console.error(err);
-      setApiError(err.message);
+      setApiError(ERRORS[err.code] ?? "Google sign-up didn't work. Try again.");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen font-poppins bg-bg-light-gray flex">
-      <div className="hidden lg:flex w-1/2 flex-col items-center justify-center bg-gradient-to-br from-primary to-secondary text-white p-12 text-center">
-        <h1 className="font-montserrat text-5xl font-bold leading-tight">
-          Forge Your Future
-        </h1>
-        <p className="mt-4 max-w-md text-lg opacity-90">
-          Connect with mentors and build your path with confidence.
-        </p>
-      </div>
-
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 space-y-6">
-          <h2 className="font-montserrat text-3xl font-bold text-gray-800">
-            Create an Account
-          </h2>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <InputField
-              id="name"
-              name="name"
-              type="text"
-              placeholder="Name"
-              value={formData.name}
-              onChange={handleInputChange}
-              error={errors.name}
-              icon={<FaUser />}
-            />
-            <InputField
-              id="email"
-              name="email"
-              type="email"
-              placeholder="Email"
-              value={formData.email}
-              onChange={handleInputChange}
-              error={errors.email}
-              icon={<FaEnvelope />}
-            />
-            <InputField
-              id="password"
-              name="password"
-              type="password"
-              placeholder="Password"
-              value={formData.password}
-              onChange={handleInputChange}
-              error={errors.password}
-              icon={<FaLock />}
-            />
-            <InputField
-              id="confirmPassword"
-              name="confirmPassword"
-              type="password"
-              placeholder="Confirm Password"
-              value={formData.confirmPassword}
-              onChange={handleInputChange}
-              error={errors.confirmPassword}
-              icon={<FaLock />}
-            />
-
-            <div>
-              <p className="text-gray-700 mb-2">I am signing up as:</p>
-              <div className="flex gap-4">
-                <RoleRadioButton
-                  id="role-student"
-                  name="role"
-                  value="student"
-                  checked={formData.role === "student"}
-                  onChange={handleRoleChange}
-                  label="Student"
-                  icon={<FaGraduationCap />}
-                />
-                <RoleRadioButton
-                  id="role-mentor"
-                  name="role"
-                  value="mentor"
-                  checked={formData.role === "mentor"}
-                  onChange={handleRoleChange}
-                  label="Mentor"
-                  icon={<FaBriefcase />}
-                />
-              </div>
-            </div>
-
-            {formData.role === "mentor" && (
-              <InputField
-                id="expertise"
-                name="expertise"
-                as="select"
-                value={formData.expertise}
-                onChange={handleInputChange}
-                error={errors.expertise}
-                icon={<FaGraduationCap />}
-              >
-                <option value="" disabled>Select your expertise</option>
-                <option value="personal">Personal Development</option>
-                <option value="spiritual">Spiritual Growth</option>
-                <option value="career">Career & Business</option>
-                <option value="educational">Educational Guidance</option>
-              </InputField>
-            )}
-
-            {apiError && (
-              <p className="text-red-600 bg-red-50 p-3 rounded-lg">
-                {apiError}
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-white font-bold rounded-lg"
-            >
-              {isLoading ? "Registering..." : "Register"}
-            </button>
-
-            <p className="text-center text-sm text-gray-500">
-              Already have an account?{" "}
-              <Link to="/login" className="text-primary font-semibold"> {/* 🔥 FIXED */}
-                Login here
-              </Link>
-            </p>
-          </form>
-
-          <div className="flex items-center">
-            <div className="flex-grow border-t" />
-            <span className="px-2 text-gray-400">OR</span>
-            <div className="flex-grow border-t" />
-          </div>
-
+    <AuthShell title="Create your account" subtitle="A nickname is fine. Nobody here needs your real name." side={<Side />}>
+      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Account type">
+        {ROLES.map((r) => (
           <button
-            onClick={handleGoogleRegister}
-            className="w-full flex gap-2 items-center justify-center py-3 border rounded-lg"
+            key={r.key}
+            type="button"
+            role="radio"
+            aria-checked={role === r.key}
+            onClick={() => setRole(r.key)}
+            className={`rounded-2xl p-3.5 text-left ring-1 transition ${
+              role === r.key ? "bg-primary-50 ring-2 ring-primary" : "ring-line hover:bg-bg-light-gray"
+            }`}
           >
-            <FaGoogle className="text-red-500" />
-            Register with Google
+            <span className={`block text-sm font-bold ${role === r.key ? "text-primary" : ""}`}>{r.title}</span>
+            <span className="mt-1 block text-xs leading-snug text-muted">{r.body}</span>
           </button>
-        </div>
+        ))}
       </div>
-    </div>
+
+      {role === "mentor" && (
+        <div className="mt-5 animate-rise">
+          <span className="label">What can you help with?</span>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(EXPERTISE_LABELS).map(([k, label]) => (
+              <button
+                type="button"
+                key={k}
+                onClick={() => {
+                  toggleArea(k);
+                  setErrors((x) => ({ ...x, expertise: null }));
+                }}
+                className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ring-1 transition ${
+                  form.expertise.includes(k) ? "bg-primary-50 text-primary ring-primary" : "ring-line hover:bg-bg-light-gray"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <FieldError>{errors.expertise}</FieldError>
+        </div>
+      )}
+
+      <button onClick={google} disabled={loading} className="btn-ghost mt-6 w-full py-3">
+        <GoogleIcon /> Sign up with Google
+      </button>
+      <div className="my-6">
+        <Divider />
+      </div>
+
+      <form onSubmit={submit} className="space-y-4" noValidate>
+        <div>
+          <label className="label" htmlFor="name">Name or nickname</label>
+          <input id="name" name="name" autoComplete="nickname" value={form.name} onChange={update} className={`field ${errors.name ? "border-red-400" : ""}`} />
+          <FieldError>{errors.name}</FieldError>
+        </div>
+        <div>
+          <label className="label" htmlFor="email">Email</label>
+          <input id="email" name="email" type="email" autoComplete="email" value={form.email} onChange={update} className={`field ${errors.email ? "border-red-400" : ""}`} placeholder="you@example.com" />
+          <FieldError>{errors.email}</FieldError>
+        </div>
+        <div>
+          <label className="label" htmlFor="password">Password</label>
+          <PasswordInput id="password" value={form.password} onChange={update} autoComplete="new-password" placeholder="At least 8 characters" invalid={!!errors.password} />
+          {form.password && (
+            <div className="mt-2 flex gap-1">
+              {[0, 1, 2, 3].map((i) => (
+                <span
+                  key={i}
+                  className={`h-1 flex-1 rounded-full transition ${
+                    i < score ? (score <= 1 ? "bg-red-400" : score === 2 ? "bg-amber-400" : "bg-emerald-500") : "bg-bg-medium-gray"
+                  }`}
+                />
+              ))}
+            </div>
+          )}
+          <FieldError>{errors.password}</FieldError>
+        </div>
+        {apiError && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{apiError}</p>}
+        <button type="submit" disabled={loading} className="btn-primary w-full py-3">
+          {loading && <Spinner />} Create account
+        </button>
+        <p className="text-center text-xs text-muted">We'll send a link to confirm your email.</p>
+      </form>
+
+      <p className="mt-8 text-center text-sm text-muted">
+        Already have an account?{" "}
+        <Link to="/login" className="font-semibold text-primary hover:underline">
+          Log in
+        </Link>
+      </p>
+    </AuthShell>
   );
 }
 

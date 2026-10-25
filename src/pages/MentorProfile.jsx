@@ -1,137 +1,129 @@
-import { useParams } from "react-router-dom";
-import { doc, getDoc, collection, addDoc, query, where, getDocs, updateDoc, deleteDoc } from "firebase/firestore";
-import { db, auth } from "../firebase";
 import { useEffect, useState } from "react";
+import { expertiseList } from "../lib/people";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import toast from "react-hot-toast";
+import { collection, deleteDoc, doc, getDoc, getDocs, query, where } from "firebase/firestore";
+import { FiArrowLeft, FiMessageCircle } from "react-icons/fi";
+import { db } from "../firebase";
+import { useDashboard } from "../lib/useProgress";
+import { Avatar, PageSkeleton } from "../components/ui";
+import { RequestButton } from "../components/dashboard/components/FindMentor";
+import { sendMentorRequest } from "../lib/actions";
 
 function MentorProfile() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { user, role } = useDashboard();
   const [mentor, setMentor] = useState(null);
+  const [req, setReq] = useState(null);
+  const [busy, setBusy] = useState(false);
 
-  const [requestStatus, setRequestStatus] = useState("none"); 
-  // none | pending | accepted
-  const [requestId, setRequestId] = useState(null);
-
-  const user = auth.currentUser;
-
-  // -------------------------------------------------------
-  // FETCH MENTOR PROFILE
-  // -------------------------------------------------------
   useEffect(() => {
-    async function fetchMentor() {
-      const ref = doc(db, "users", id);
-      const snap = await getDoc(ref);
-
-      if (snap.exists()) setMentor(snap.data());
-    }
-    fetchMentor();
+    getDoc(doc(db, "users", id)).then((s) => setMentor(s.exists() ? s.data() : false));
   }, [id]);
 
-  // -------------------------------------------------------
-  // CHECK IF REQUEST ALREADY EXISTS
-  // -------------------------------------------------------
   useEffect(() => {
     if (!user) return;
-
-    async function checkRequest() {
-      const q = query(
-        collection(db, "requests"),
-        where("studentId", "==", user.uid),
-        where("mentorId", "==", id)
-      );
-
-      const snap = await getDocs(q);
-
-      if (!snap.empty) {
-        const req = snap.docs[0];
-        setRequestId(req.id);
-        setRequestStatus(req.data().status);
-      }
-    }
-
-    checkRequest();
+    getDocs(query(collection(db, "requests"), where("studentId", "==", user.uid))).then((snap) => {
+      const mine = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((r) => r.mentorId === id && (r.status === "pending" || r.status === "accepted"));
+      setReq(mine[0] || null);
+    });
   }, [user, id]);
 
-  // -------------------------------------------------------
-  // SEND REQUEST
-  // -------------------------------------------------------
-  const handleSendRequest = async () => {
-    if (!user) return alert("Login to send request!");
+  if (mentor === null) return <PageSkeleton />;
+  if (mentor === false)
+    return (
+      <div className="card p-10 text-center">
+        <p className="font-bold">This profile doesn't exist anymore.</p>
+        <Link to="/dashboard/find-mentor" className="btn-soft mt-4">Browse mentors</Link>
+      </div>
+    );
 
-    if (requestStatus !== "none")
-      return alert("You already sent a request!");
-
-    const ref = await addDoc(collection(db, "requests"), {
-      studentId: user.uid,
-      mentorId: id,
-      status: "pending",
-      createdAt: new Date(),
-    });
-
-    setRequestId(ref.id);
-    setRequestStatus("pending");
+  const request = async () => {
+    setBusy(true);
+    try {
+      const rid = await sendMentorRequest(user.uid, id);
+      setReq({ id: rid, status: "pending" });
+      toast.success("Request sent");
+    } catch {
+      toast.error("Couldn't send the request.");
+    } finally {
+      setBusy(false);
+    }
   };
 
-  // -------------------------------------------------------
-  // CANCEL PENDING REQUEST
-  // -------------------------------------------------------
-  const handleCancelRequest = async () => {
-    if (!requestId) return;
-    await deleteDoc(doc(db, "requests", requestId));
-    setRequestStatus("none");
-    setRequestId(null);
+  const cancel = async () => {
+    if (!req?.id) return;
+    setBusy(true);
+    try {
+      await deleteDoc(doc(db, "requests", req.id));
+      setReq(null);
+      toast("Request withdrawn");
+    } finally {
+      setBusy(false);
+    }
   };
 
-  // -------------------------------------------------------
-  if (!mentor) return <div className="p-10">Loading mentor...</div>;
+  const count = mentor.myStudents?.length || 0;
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6 bg-white rounded-lg shadow">
-      <img
-        src={mentor.profilePic}
-        className="w-32 h-32 rounded-full object-cover"
-      />
-      <h1 className="text-3xl font-bold">{mentor.name}</h1>
-      <p className="text-gray-600">{mentor.bio || "No bio yet"}</p>
+    <div className="mx-auto max-w-3xl">
+      <button onClick={() => navigate(-1)} className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-muted hover:text-ink">
+        <FiArrowLeft /> Back
+      </button>
 
-      <h3 className="font-semibold mt-4">Expertise</h3>
-      <div className="flex gap-2 flex-wrap">
-        {(Array.isArray(mentor.expertise) ? mentor.expertise : [mentor.expertise]).map((e) => (
-          <span
-            key={e}
-            className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm"
-          >
-            {e}
-          </span>
-        ))}
+      <div className="card overflow-hidden">
+        <div className="h-28 bg-gradient-to-r from-primary to-secondary sm:h-36" />
+        <div className="px-6 pb-7 sm:px-8">
+          <div className="-mt-12 flex flex-col gap-4 sm:-mt-14 sm:flex-row sm:items-end sm:justify-between">
+            <Avatar person={mentor} size={104} className="ring-4 ring-white" />
+            {role !== "mentor" && (
+              <div className="flex gap-2">
+                {req?.status === "accepted" && (
+                  <Link to={`/dashboard/chat/${user.uid}_${id}`} className="btn-primary">
+                    <FiMessageCircle /> Message
+                  </Link>
+                )}
+                {req?.status === "pending" ? (
+                  <button onClick={cancel} disabled={busy} className="btn-ghost">
+                    Withdraw request
+                  </button>
+                ) : req?.status !== "accepted" ? (
+                  <RequestButton status={req?.status} busy={busy} onRequest={request} />
+                ) : null}
+              </div>
+            )}
+          </div>
+
+          <h1 className="mt-4 text-3xl font-extrabold">{mentor.name}</h1>
+          <p className="mt-1 text-sm text-muted">
+            Mentor{count > 0 ? ` · ${count} ${count === 1 ? "student" : "students"}` : ""}
+          </p>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {expertiseList(mentor.expertise).map((e) => (
+              <span key={e.key} className="rounded-full bg-primary-50 px-3 py-1 text-sm font-semibold text-primary">
+                {e.label}
+              </span>
+            ))}
+          </div>
+
+          <div className="mt-6 border-t border-line pt-6">
+            <h2 className="eyebrow">About</h2>
+            <p className="mt-2 whitespace-pre-line text-[16px] leading-relaxed text-ink/80">
+              {mentor.bio || "This mentor hasn't written a bio yet."}
+            </p>
+          </div>
+
+          {req?.status === "pending" && (
+            <p className="mt-6 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Your request is waiting. You'll be able to message them as soon as they accept.
+            </p>
+          )}
+        </div>
       </div>
-
-      {/* ------------------------ REQUEST BUTTON ------------------------ */}
-      {requestStatus === "none" && (
-        <button
-          onClick={handleSendRequest}
-          className="w-full py-3 bg-primary text-white rounded-md mt-6"
-        >
-          Send Request
-        </button>
-      )}
-
-      {requestStatus === "pending" && (
-        <button
-          onClick={handleCancelRequest}
-          className="w-full py-3 bg-yellow-500 text-white rounded-md mt-6"
-        >
-          Pending... (Cancel?)
-        </button>
-      )}
-
-      {requestStatus === "accepted" && (
-        <button
-          disabled
-          className="w-full py-3 bg-green-600 text-white rounded-md mt-6"
-        >
-          Accepted ✔
-        </button>
-      )}
     </div>
   );
 }

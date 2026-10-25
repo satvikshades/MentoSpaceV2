@@ -1,162 +1,69 @@
-import React, { useState } from "react";
-// Import icons from react-icons
-import { FaEnvelope, FaKey } from "react-icons/fa";
-
-// This is a placeholder for a routing library component like react-router-dom's <Link>
-const Link = ({ href, children, className }) => (
-  <a href={href} className={className}>
-    {children}
-  </a>
-);
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { sendPasswordResetEmail } from "firebase/auth";
+import { FiArrowLeft, FiMail } from "react-icons/fi";
+import { auth } from "../firebase";
+import AuthShell from "../components/AuthShell";
+import { Spinner } from "../components/ui";
 
 function ForgotPassword() {
-  // State to manage the email input
   const [email, setEmail] = useState("");
+  const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  // State for API submission status and messages
-  const [isLoading, setIsLoading] = useState(false);
-  const [apiError, setApiError] = useState("");
-  const [apiSuccess, setApiSuccess] = useState("");
-
-  const handleInputChange = (e) => {
-    setEmail(e.target.value);
-    // Clear previous messages when user starts typing
-    if (apiError) setApiError("");
-    if (apiSuccess) setApiSuccess("");
-  };
-
-  const handleSubmit = async (e) => {
+  const submit = async (e) => {
     e.preventDefault();
-    setApiError("");
-    setApiSuccess("");
-
-    // Basic validation
-    if (!email) {
-      setApiError("Please enter your email address.");
-      return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) return setError("Enter a valid email address.");
+    setLoading(true);
+    setError("");
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      setSent(true);
+    } catch (err) {
+      // Don't reveal whether an account exists.
+      if (err.code === "auth/user-not-found") setSent(true);
+      else setError(err.code === "auth/too-many-requests" ? "Too many tries. Wait a few minutes." : "Couldn't send the email. Try again.");
+    } finally {
+      setLoading(false);
     }
-
-    setIsLoading(true);
-
-    // --- API Call Simulation ---
-    console.log("Sending password reset link to:", email);
-    await new Promise((resolve) => setTimeout(resolve, 1500)); // Simulate network delay
-
-    // Example logic: In a real app, you'd check if the email exists
-    if (email === "error@example.com") {
-      setApiError("No account found with this email address.");
-    } else {
-      setApiSuccess(
-        `A password reset link has been sent to ${email}. Please check your inbox.`
-      );
-    }
-    // --- End of Simulation ---
-
-    setIsLoading(false);
   };
 
   return (
-    <div className="min-h-screen font-poppins bg-bg-light-gray flex">
-      {/* Left Panel - Branding (Consistent with other pages) */}
-      <div className="hidden lg:flex w-1/2 flex-col items-center justify-center bg-gradient-to-br from-primary to-secondary text-white p-12 text-center">
-        <h1 className="font-montserrat text-5xl font-bold leading-tight">
-          Can't Remember?
-        </h1>
-        <p className="mt-4 max-w-md text-lg opacity-90">
-          No worries. We'll help you get back into your account in no time.
-        </p>
-        <div className="absolute bottom-10">
-          <Link href="index.html" className="text-center group">
-            <p className="font-montserrat text-3xl font-bold group-hover:text-gray-200 transition-colors">
-              MentoSpace<span className="text-white">.</span>
-            </p>
-            <p className="text-sm opacity-90 tracking-wide">
-              Building strong individuals
-            </p>
+    <AuthShell
+      title={sent ? "Check your inbox" : "Reset your password"}
+      subtitle={sent ? undefined : "We'll email you a link to choose a new one."}
+      side={<p className="font-serif text-[34px] italic leading-[1.15] text-white/95">It happens to everyone.</p>}
+    >
+      {sent ? (
+        <div className="animate-rise">
+          <div className="grid h-14 w-14 place-items-center rounded-2xl bg-primary-50 text-2xl text-primary">
+            <FiMail />
+          </div>
+          <p className="mt-5 text-[15px] leading-relaxed text-ink/80">
+            If there's an account for <b>{email}</b>, a reset link is on its way. It can take a minute, and it sometimes lands in spam.
+          </p>
+          <Link to="/login" className="btn-primary mt-8 w-full py-3">
+            Back to log in
           </Link>
         </div>
-      </div>
-
-      {/* Right Panel - Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-8">
-        <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-8 space-y-6">
-          {/* Header Section */}
-          <div className="text-center">
-            <FaKey className="h-10 w-10 text-primary mx-auto" />
-            <h2 className="font-montserrat text-3xl font-bold text-gray-800 mt-4">
-              Forgot Password
-            </h2>
-            <p className="text-gray-500 mt-2">
-              Enter your email to receive a reset link.
-            </p>
+      ) : (
+        <form onSubmit={submit} className="space-y-4" noValidate>
+          <div>
+            <label className="label" htmlFor="email">Email</label>
+            <input id="email" type="email" autoComplete="email" autoFocus value={email} onChange={(e) => setEmail(e.target.value)} className="field" placeholder="you@example.com" />
           </div>
-
-          {/* Display success message and hide form */}
-          {apiSuccess ? (
-            <div className="text-center p-4 bg-green-50 text-green-700 rounded-lg">
-              <p className="font-semibold">Check Your Email</p>
-              <p className="text-sm mt-1">{apiSuccess}</p>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Input Field */}
-              <InputField
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={handleInputChange}
-                icon={<FaEnvelope />}
-              />
-
-              {/* Display API error message */}
-              {apiError && (
-                <p className="text-sm text-red-600 text-center">{apiError}</p>
-              )}
-
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-3 px-4 font-bold text-white bg-gradient-to-r from-primary to-secondary rounded-lg transform hover:-translate-y-0.5 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-secondary disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                {isLoading ? "Sending Link..." : "Send Reset Link"}
-              </button>
-            </form>
-          )}
-
-          {/* Back to Login Link */}
-          <p className="text-center text-sm text-gray-500 pt-2">
-            <Link
-              href="login.html"
-              className="font-semibold text-primary hover:underline"
-            >
-              &larr; Back to Login
-            </Link>
-          </p>
-        </div>
-      </div>
-    </div>
+          {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</p>}
+          <button disabled={loading} className="btn-primary w-full py-3">
+            {loading && <Spinner />} Send reset link
+          </button>
+          <Link to="/login" className="flex items-center justify-center gap-2 pt-4 text-sm font-semibold text-muted hover:text-ink">
+            <FiArrowLeft /> Back to log in
+          </Link>
+        </form>
+      )}
+    </AuthShell>
   );
 }
-
-// Reusable Input Field Component
-const InputField = ({ id, type, placeholder, value, onChange, icon }) => (
-  <div className="relative">
-    <span className="absolute inset-y-0 left-0 flex items-center pl-4">
-      {React.cloneElement(icon, { className: "h-5 w-5 text-gray-400" })}
-    </span>
-    <input
-      type={type}
-      id={id}
-      name={id}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      className="w-full pl-12 pr-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition duration-300"
-      required
-    />
-  </div>
-);
 
 export default ForgotPassword;
