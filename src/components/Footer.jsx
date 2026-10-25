@@ -18,11 +18,12 @@ function Footer() {
             <a href="#programs" className="hover:text-ink">Programs</a>
             <Link to="/login" className="hover:text-ink">Log in</Link>
             <a href="#mentors" className="hover:text-ink">For mentors</a>
+            <Link to="/privacy" className="hover:text-ink">Privacy and consent</Link>
           </div>
         </div>
 
         <div className="mt-12 rounded-2xl bg-white p-5 text-sm leading-relaxed text-ink/70 ring-1 ring-line">
-          MentoSpace is peer support, not a replacement for professional care. If you're in crisis, contact your local
+          MentoSpace offers mentoring and support. It is not a replacement for a doctor, psychiatrist or emergency service. If you're in crisis, contact your local
           emergency number. In India, Tele-MANAS is free and open 24/7 at{" "}
           <a href="tel:14416" className="font-bold text-primary">14416</a>.
         </div>

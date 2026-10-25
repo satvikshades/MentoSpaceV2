@@ -57,14 +57,15 @@ const HeroSection = () => {
     <header className="relative overflow-hidden bg-white pt-28 sm:pt-36">
       <div className="mx-auto grid max-w-6xl items-center gap-14 px-5 pb-20 sm:px-8 lg:grid-cols-[1.1fr_1fr] lg:pb-28">
         <div>
-          <p className="eyebrow animate-rise">Peer mentoring for students</p>
+          <p className="eyebrow animate-rise">Psychology mentors for students in India</p>
           <h1 className="mt-4 text-[44px] font-extrabold leading-[1.02] tracking-[-0.035em] sm:text-[64px] animate-rise" style={{ animationDelay: "60ms" }}>
             A safe space to heal and grow,{" "}
             <span className="font-serif font-medium italic tracking-[-0.02em] text-primary">together.</span>
           </h1>
           <p className="mt-6 max-w-lg text-[17px] leading-relaxed text-ink/70 animate-rise" style={{ animationDelay: "120ms" }}>
-            Check in with yourself every day, build small habits that stick, and talk to a mentor who's been where you
-            are. No real name needed.
+            Talk to a psychology mentor in confidence about depression, questions about who you are, growing up, or
+            harassment you haven't told anyone about. Check in with yourself every day and build small habits that help.
+            No real name needed.
           </p>
           <div className="mt-9 flex flex-wrap items-center gap-3 animate-rise" style={{ animationDelay: "180ms" }}>
             <Link to="/register" className="btn-primary px-6 py-3.5 text-base">

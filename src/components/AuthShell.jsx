@@ -53,10 +53,10 @@ export function Divider() {
 }
 
 /** Two-column auth layout: a quiet brand panel on the left, the form on the right. */
-export default function AuthShell({ title, subtitle, children, side }) {
+export default function AuthShell({ title, subtitle, children, side, wide = false }) {
   return (
     <div className="flex min-h-screen bg-white">
-      <aside className="relative hidden w-[44%] max-w-[620px] overflow-hidden bg-bg-dark p-12 text-white lg:flex lg:flex-col">
+      <aside className="relative hidden w-[44%] max-w-[620px] overflow-hidden bg-bg-dark p-12 text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
         <div className="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full bg-primary/40 blur-[110px]" />
         <div className="pointer-events-none absolute -bottom-40 -left-24 h-96 w-96 rounded-full bg-secondary/30 blur-[120px]" />
         <Link to="/" className="relative text-2xl font-extrabold tracking-tight">
@@ -69,7 +69,7 @@ export default function AuthShell({ title, subtitle, children, side }) {
         <Link to="/" className="wordmark text-xl lg:hidden">
           MentoSpace<span className="text-secondary">.</span>
         </Link>
-        <div className="mx-auto flex w-full max-w-[400px] flex-1 flex-col justify-center py-10">
+        <div className={`mx-auto flex w-full flex-1 flex-col justify-center py-10 ${wide ? "max-w-[600px]" : "max-w-[400px]"}`}>
           <h1 className="text-[30px] font-extrabold leading-tight">{title}</h1>
           {subtitle && <p className="mt-2 text-[15px] text-muted">{subtitle}</p>}
           <div className="mt-8">{children}</div>
