@@ -1,8 +1,10 @@
 import { useState } from "react";
 import toast from "react-hot-toast";
-import { doc, deleteDoc, updateDoc } from "firebase/firestore";
+import { addDoc, collection, doc, deleteDoc, serverTimestamp, updateDoc } from "firebase/firestore";
+import { Link } from "react-router-dom";
 import { deleteUser, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "firebase/auth";
-import { FiLock, FiBell, FiLogOut, FiAlertTriangle } from "react-icons/fi";
+import { FiLock, FiBell, FiLogOut, FiAlertTriangle, FiShield } from "react-icons/fi";
+import { ORG } from "../../../lib/legal";
 import { db } from "../../../firebase";
 import { useDashboard } from "../../../lib/useProgress";
 import { Modal, PageHeader, Spinner } from "../../ui";
@@ -48,6 +50,28 @@ function Setting() {
       toast.error("Couldn't save that setting.");
     }
   };
+
+  const setShareMoods = async (value) => {
+    const consent = { ...(profile.consent || {}), shareMoods: value };
+    setProfile((p) => ({ ...p, consent }));
+    try {
+      await updateDoc(doc(db, "users", user.uid), { "consent.shareMoods": value });
+      addDoc(collection(db, "consent_logs"), {
+        uid: user.uid,
+        version: consent.version || null,
+        change: value ? "granted shareMoods" : "withdrew shareMoods",
+        savedAt: serverTimestamp(),
+      }).catch(() => {});
+      toast.success(value ? "Your mentor can now see your check-ins" : "Your check-ins are now private");
+    } catch {
+      setProfile((p) => ({ ...p, consent: { ...consent, shareMoods: !value } }));
+      toast.error("Couldn't save that setting.");
+    }
+  };
+
+  const agreedOn = profile.consent?.acceptedAt
+    ? new Date(profile.consent.acceptedAt).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })
+    : null;
 
   const changePassword = async (e) => {
     e.preventDefault();
@@ -111,6 +135,33 @@ function Setting() {
         </div>
       </section>
 
+      <section className="card px-5 pb-5 sm:px-6">
+        <h2 className="flex items-center gap-2 pt-5 text-lg font-bold">
+          <FiShield className="text-muted" /> Privacy and consent
+        </h2>
+        {profile.role !== "mentor" && (
+          <Toggle
+            label="Let my mentor see my mood check-ins"
+            hint="Turn this off any time. Your mentor will still be able to read messages you send them."
+            checked={profile.consent?.shareMoods === true}
+            onChange={setShareMoods}
+          />
+        )}
+        <div className="space-y-3 border-t border-line pt-4 text-sm leading-relaxed text-ink/80">
+          <p>
+            {agreedOn ? `You agreed to our consent notice on ${agreedOn}. ` : ""}
+            <Link to="/privacy" target="_blank" className="font-semibold text-primary hover:underline">
+              Read it again
+            </Link>
+          </p>
+          <p>
+            To get a summary of your data, correct it, erase it, nominate someone to act for you, or raise a complaint, write to our
+            Grievance Officer, {ORG.grievanceOfficer}, at <b className="select-all">{ORG.grievanceEmail}</b>. We reply within{" "}
+            {ORG.responseDays} days. You can also complain to the Data Protection Board of India.
+          </p>
+        </div>
+      </section>
+
       {usesPassword && (
         <section className="card p-5 sm:p-6">
           <h2 className="flex items-center gap-2 text-lg font-bold">
@@ -137,9 +188,12 @@ function Setting() {
 
       <section className="rounded-2xl border border-red-200 bg-white p-5 sm:p-6">
         <h2 className="flex items-center gap-2 text-lg font-bold text-red-700">
-          <FiAlertTriangle /> Delete account
+          <FiAlertTriangle /> Withdraw consent and delete account
         </h2>
-        <p className="mt-1 text-sm text-muted">This removes your profile and signs you out for good. It can't be undone.</p>
+        <p className="mt-1 text-sm text-muted">
+          This withdraws your consent, removes your profile and signs you out for good. We erase the rest of your data within{" "}
+          {ORG.deletionDays} days, except anything the law requires us to keep. It can't be undone.
+        </p>
         <button onClick={() => setDel(true)} className="btn-danger mt-4">
           Delete my account
         </button>

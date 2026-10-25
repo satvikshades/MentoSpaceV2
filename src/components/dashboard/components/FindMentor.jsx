@@ -4,6 +4,8 @@ import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { sendMentorRequest } from "../../../lib/actions";
+import { mentorIsLive } from "../../../lib/consent";
+import { qualificationLabel } from "../../../lib/legal";
 import { FiSearch, FiCheck, FiClock } from "react-icons/fi";
 import { db } from "../../../firebase";
 import { useDashboard } from "../../../lib/useProgress";
@@ -44,7 +46,7 @@ function FindMentor() {
           getDocs(query(collection(db, "users"), where("role", "==", "mentor"))),
           getDocs(query(collection(db, "requests"), where("studentId", "==", user.uid))),
         ]);
-        setMentors(m.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setMentors(m.docs.map((d) => ({ id: d.id, ...d.data() })).filter(mentorIsLive));
         const map = {};
         r.docs
           .map((d) => ({ id: d.id, ...d.data() }))
@@ -144,7 +146,7 @@ function FindMentor() {
                   <div className="min-w-0">
                     <h3 className="truncate text-lg font-bold">{m.name}</h3>
                     <p className="text-xs text-muted">
-                      {count > 0 ? `Mentoring ${count} ${count === 1 ? "student" : "students"}` : "Open to new students"}
+                      {qualificationLabel(m.mentorDetails?.qualification) || (count > 0 ? `Mentoring ${count} ${count === 1 ? "student" : "students"}` : "Open to new students")}
                     </p>
                   </div>
                 </Link>

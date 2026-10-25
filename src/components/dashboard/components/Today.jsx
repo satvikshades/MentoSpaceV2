@@ -5,6 +5,7 @@ import { collection, doc, getDoc, getDocs, query, where } from "firebase/firesto
 import { FiArrowRight, FiCalendar, FiPlus, FiAlertCircle, FiMessageCircle } from "react-icons/fi";
 import { db } from "../../../firebase";
 import { useDashboard, useProgress } from "../../../lib/useProgress";
+import { sharesMoods } from "../../../lib/consent";
 import { addHabit, HABIT_IDEAS } from "../../../lib/actions";
 import { dayKey, doneToday, fmtTime, greeting, moodByKey, toDate, timeAgo } from "../../../lib/progress";
 import { Avatar, EmptyState, PageSkeleton, Ring } from "../../ui";
@@ -336,15 +337,15 @@ function MentorToday({ user, profile, pending }) {
         ];
         const rows = await Promise.all(
           ids.map(async (id) => {
-            const [u, m] = await Promise.all([
-              getDoc(doc(db, "users", id)),
-              getDocs(query(collection(db, "moods"), where("studentId", "==", id))),
-            ]);
+            const u = await getDoc(doc(db, "users", id));
+            const data = u.exists() ? u.data() : { name: "Student" };
+            if (!sharesMoods(data)) return { id, ...data, last: null, flag: false, private: true };
+            const m = await getDocs(query(collection(db, "moods"), where("studentId", "==", id)));
             const moods = m.docs.map((d) => d.data()).sort((a, b) => (toDate(b.createdAt) || 0) - (toDate(a.createdAt) || 0));
             const recent = moods.filter((x) => (Date.now() - (toDate(x.createdAt)?.getTime() || 0)) < 3 * 86400000);
             return {
               id,
-              ...(u.exists() ? u.data() : { name: "Student" }),
+              ...data,
               last: moods[0] || null,
               flag: recent.some((x) => x.score <= 30),
             };
@@ -400,7 +401,7 @@ function MentorToday({ user, profile, pending }) {
       <div className="grid gap-5 lg:grid-cols-3">
         <section className="card p-5 sm:p-6 lg:col-span-2 animate-rise" style={{ animationDelay: "120ms" }}>
           <h2 className="text-xl font-bold">How your students are doing</h2>
-          <p className="mt-1 text-sm text-muted">Anyone who logged a low mood in the last three days shows first.</p>
+          <p className="mt-1 text-sm text-muted">Anyone who logged a low mood in the last three days shows first. You only see check-ins from students who chose to share them.</p>
           {students.length === 0 ? (
             <div className="mt-5">
               <EmptyState
@@ -427,7 +428,7 @@ function MentorToday({ user, profile, pending }) {
                         )}
                       </p>
                       <p className="truncate text-xs text-muted">
-                        {m ? `${m.emoji} ${m.label} · ${timeAgo(s.last.createdAt)}` : "Hasn't checked in yet"}
+                        {s.private ? "Keeps check-ins private" : m ? `${m.emoji} ${m.label} · ${timeAgo(s.last.createdAt)}` : "Hasn't checked in yet"}
                       </p>
                     </div>
                     <Link to={`/dashboard/insights/${s.id}`} className="btn-ghost hidden px-3 py-2 text-sm sm:inline-flex">

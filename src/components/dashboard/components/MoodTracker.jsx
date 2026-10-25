@@ -115,7 +115,7 @@ export default function MoodTracker({ uid, today, onLogged, streak = 0 }) {
               value={note}
               onChange={(e) => setNote(e.target.value)}
               className="field resize-none"
-              placeholder="Optional. Your mentor can read what you write here."
+              placeholder="Optional. Shared with your mentor only if you allow it in Settings."
             />
           </label>
           <div className="flex items-center justify-between gap-3">

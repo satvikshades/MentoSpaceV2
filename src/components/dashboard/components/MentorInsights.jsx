@@ -6,6 +6,7 @@ import { db } from "../../../firebase";
 import { useDashboard, useMoods } from "../../../lib/useProgress";
 import { Avatar, EmptyState, PageSkeleton } from "../../ui";
 import { MoodReport } from "./MoodInsights";
+import { sharesMoods } from "../../../lib/consent";
 
 /** A mentor looking at one student's mood history. */
 export default function MentorInsights() {
@@ -37,7 +38,9 @@ export default function MentorInsights() {
           <FiMessageCircle /> Message
         </Link>
       </div>
-      {moods.length === 0 ? (
+      {!sharesMoods(student) ? (
+        <EmptyState icon="🔒" title="Check-ins are private" body={`${student.name} hasn't chosen to share mood check-ins with mentors. You can still message them.`} />
+      ) : moods.length === 0 ? (
         <EmptyState icon="📈" title="No check-ins yet" body={`${student.name} hasn't logged a mood yet.`} />
       ) : (
         <MoodReport moods={moods} />
