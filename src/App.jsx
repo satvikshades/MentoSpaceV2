@@ -7,6 +7,7 @@ import Signin from "./pages/Signin";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import ErrorPage from "./pages/Error";
+import Privacy from "./pages/Privacy";
 import { Spinner } from "./components/ui";
 
 // The dashboard is loaded on demand so the landing page stays fast.
@@ -41,6 +42,7 @@ function App() {
         <Route path="/login" element={<Signin />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/privacy" element={<Privacy />} />
         <Route path="/verify-otp" element={<Navigate to="/login" replace />} />
 
         <Route element={<DashboardLayout />}>
