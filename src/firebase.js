@@ -16,7 +16,6 @@ import {
   getFirestore,
   doc,
   setDoc,
-  getDoc
 } from "firebase/firestore";
 
 import { getStorage } from "firebase/storage"; // <- IMPORTANT: storage

@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* ------------------------------------------------------------------
+   Design tokens. Brand colours are unchanged from the original theme.
+   ------------------------------------------------------------------ */
 @theme {
   --color-primary: #4a54ff;
   --color-secondary: #8b3cff;
@@ -8,41 +11,137 @@
   --color-bg-medium-gray: #e8ebf0;
   --color-bg-dark: #2a2a2a;
 
-  --font-family-base: "Montserrat", sans-serif;
-  --font-family-alt: "Poppins", sans-serif;
+  /* supporting shades derived from the brand colours */
+  --color-primary-50: #eef0ff;
+  --color-primary-100: #dfe2ff;
+  --color-primary-700: #3138d6;
+  --color-ink: #1d1f2b;
+  --color-muted: #6b6f80;
+  --color-line: #e3e6ec;
 
-  @keyframes preloader-zoom {
-    0% {
-      transform: scale(1);
-      opacity: 1;
-    }
-    100% {
-      transform: scale(1.5);
-      opacity: 0;
-    }
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Fraunces", Georgia, serif;
+  /* kept so older class names still resolve */
+  --font-montserrat: var(--font-display);
+  --font-poppins: var(--font-sans);
+
+  --animate-rise: rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-pop: pop 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  --animate-fade: fade 0.4s ease both;
+  --animate-flame: flame 1.6s ease-in-out infinite;
+  --animate-slide-up: rise 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
   }
-
-  @keyframes fade-in {
-    0% {
-      opacity: 0;
-    }
-    100% {
-      opacity: 1;
-    }
+  @keyframes pop {
+    0% { transform: scale(0.6); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
   }
-
-  @keyframes slide-up {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+  @keyframes fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
+  @keyframes flame {
+    0%, 100% { transform: scale(1) rotate(-2deg); }
+    50% { transform: scale(1.08) rotate(2deg); }
+  }
+}
 
-  --animate-preloader-zoom: preloader-zoom 3s forwards;
-  --animate-fade-in-delayed: fade-in 1s forwards 1s;
-  --animate-slide-up: slide-up 1s forwards cubic-bezier(0.2, 0.8, 0.4, 1);
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-bg-light-gray font-sans text-ink;
+  }
+  h1, h2, h3, h4 {
+    @apply font-display tracking-tight text-ink;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+  }
+  button, [role="button"], a, label[for], select {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  input, textarea, select {
+    @apply text-ink;
+  }
+  /* let grid items shrink so inner scrollers don't widen the page */
+  .grid > * {
+    min-width: 0;
+  }
+}
+
+@utility card {
+  @apply rounded-2xl border border-line bg-white;
+}
+
+@utility field {
+  @apply w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-[15px] text-ink outline-none transition placeholder:text-muted/70 focus:border-primary focus:ring-4 focus:ring-primary/10;
+}
+
+@utility label {
+  @apply mb-1.5 block text-[13px] font-semibold text-ink/80;
+}
+
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[15px] font-semibold transition active:scale-[0.97] disabled:opacity-60 disabled:active:scale-100;
+}
+
+@utility btn-primary {
+  @apply btn bg-primary text-white shadow-[0_1px_0_rgba(255,255,255,0.25)_inset,0_6px_16px_-6px_rgba(74,84,255,0.6)] hover:bg-primary-700;
+}
+
+@utility btn-ghost {
+  @apply btn bg-white text-ink ring-1 ring-line hover:bg-bg-light-gray;
+}
+
+@utility btn-soft {
+  @apply btn bg-primary-50 text-primary hover:bg-primary-100;
+}
+
+@utility btn-danger {
+  @apply btn bg-red-50 text-red-600 hover:bg-red-100;
+}
+
+@utility eyebrow {
+  @apply text-[12px] font-bold uppercase tracking-[0.14em] text-primary;
+}
+
+@utility wordmark {
+  @apply bg-gradient-to-r from-primary to-secondary bg-clip-text font-display font-extrabold tracking-tight text-transparent;
+}
+
+/* small confetti burst used on check-ins */
+.burst-dot {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  animation: burst 0.9s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+@keyframes burst {
+  0% { transform: translate(0, 0) rotate(0); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

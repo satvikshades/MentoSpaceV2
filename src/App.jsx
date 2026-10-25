@@ -1,70 +1,66 @@
-import React from "react";
-import { Route, Routes } from "react-router-dom";
+import { lazy, Suspense } from "react";
+import { Navigate, Route, Routes } from "react-router-dom";
 
 import Home from "./pages/Home";
 import Registration from "./pages/Registration";
 import Signin from "./pages/Signin";
-import OtpVerification from "./pages/OTP";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import ErrorPage from "./pages/Error";
+import { Spinner } from "./components/ui";
 
-import DashboardLayout from "./components/dashboard/DashboardLayout";
-import MyProfile from "./components/dashboard/components/MyProfile";
-import Setting from "./components/dashboard/components/Setting";
-import Sessions from "./components/dashboard/components/Sessions";
-import FindMentor from "./components/dashboard/components/FindMentor";
+// The dashboard is loaded on demand so the landing page stays fast.
+const DashboardLayout = lazy(() => import("./components/dashboard/DashboardLayout"));
+const Today = lazy(() => import("./components/dashboard/components/Today"));
+const Habits = lazy(() => import("./components/dashboard/components/Habits"));
+const MoodInsights = lazy(() => import("./components/dashboard/components/MoodInsights"));
+const MentorInsights = lazy(() => import("./components/dashboard/components/MentorInsights"));
+const MyProfile = lazy(() => import("./components/dashboard/components/MyProfile"));
+const Setting = lazy(() => import("./components/dashboard/components/Setting"));
+const Sessions = lazy(() => import("./components/dashboard/components/Sessions"));
+const FindMentor = lazy(() => import("./components/dashboard/components/FindMentor"));
+const MyStudents = lazy(() => import("./components/dashboard/components/MyStudents"));
+const Chats = lazy(() => import("./components/dashboard/components/Chats"));
+const ChatRoom = lazy(() => import("./components/dashboard/components/ChatRoom"));
+const MentorProfile = lazy(() => import("./pages/MentorProfile"));
 
-import MentorProfile from "./pages/MentorProfile";
-import MyStudents from "./components/dashboard/components/MyStudents";
-
-// 🔥 IMPORTANT → you forgot these imports
-import Chats from "./components/dashboard/components/Chats";
-import ChatRoom from "./components/dashboard/components/ChatRoom";
-import MentorInsights from "./components/dashboard/components/MentorInsights";
-import MoodInsights from "./components/dashboard/components/MoodInsights";
-
-import Habits from "./components/dashboard/components/Habits";
-
-
+function Loading() {
+  return (
+    <div className="grid min-h-[60vh] place-items-center text-primary">
+      <Spinner className="h-6 w-6" />
+    </div>
+  );
+}
 
 function App() {
   return (
-    <>
+    <Suspense fallback={<Loading />}>
       <Routes>
-
         <Route path="/" element={<Home />} />
         <Route path="/register" element={<Registration />} />
         <Route path="/login" element={<Signin />} />
-        <Route path="/verify-otp" element={<OtpVerification />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/verify-otp" element={<Navigate to="/login" replace />} />
 
-        {/* Mentor Public Profile */}
-        <Route path="/mentor/:id" element={<MentorProfile />} />
-
-        {/* Dashboard Routes */}
         <Route element={<DashboardLayout />}>
-          <Route path="/dashboard/insights/:studentId" element={<MoodInsights />} />
-
+          <Route path="/dashboard" element={<Today />} />
+          <Route path="/dashboard/habits" element={<Habits />} />
+          <Route path="/dashboard/mood" element={<MoodInsights />} />
           <Route path="/dashboard/profile" element={<MyProfile />} />
           <Route path="/dashboard/settings" element={<Setting />} />
           <Route path="/dashboard/sessions" element={<Sessions />} />
           <Route path="/dashboard/find-mentor" element={<FindMentor />} />
-
           <Route path="/dashboard/my-students" element={<MyStudents />} />
-
-          {/* Chats */}
+          <Route path="/dashboard/insights/:studentId" element={<MentorInsights />} />
           <Route path="/dashboard/chats" element={<Chats />} />
           <Route path="/dashboard/chat/:chatId" element={<ChatRoom />} />
-          <Route path="/dashboard/habits" element={<Habits />} />
-          <Route path="/dashboard/insights/:studentId" element={<MentorInsights />} />
-
+          <Route path="/mentor/:id" element={<MentorProfile />} />
         </Route>
 
         <Route path="*" element={<ErrorPage />} />
       </Routes>
-    </>
+    </Suspense>
   );
 }
 
