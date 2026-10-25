@@ -6,6 +6,8 @@ import { auth, db } from "../../firebase";
 import Sidebar from "./components/Sidebar";
 import BottomNav from "./components/BottomNav";
 import { Avatar, Spinner } from "../ui";
+import ConsentGate from "./components/ConsentGate";
+import { needsConsent } from "../../lib/consent";
 
 const STUDENT_ONLY = ["/dashboard/find-mentor", "/dashboard/habits", "/dashboard/mood"];
 const MENTOR_ONLY = ["/dashboard/my-students", "/dashboard/insights"];
@@ -24,10 +26,10 @@ function DashboardLayout() {
       }
       try {
         const snap = await getDoc(doc(db, "users", u.uid));
-        setProfile(snap.exists() ? { id: u.uid, ...snap.data() } : { id: u.uid, name: u.displayName, email: u.email, role: "student" });
+        setProfile(snap.exists() ? { id: u.uid, ...snap.data() } : { id: u.uid, name: u.displayName, email: u.email, missing: true });
       } catch (err) {
         console.error(err);
-        setProfile({ id: u.uid, name: u.displayName, email: u.email, role: "student" });
+        setProfile({ id: u.uid, name: u.displayName, email: u.email, missing: true });
       }
       setUser(u);
     });
@@ -52,6 +54,10 @@ function DashboardLayout() {
     );
   }
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+
+  if (needsConsent(profile)) {
+    return <ConsentGate user={user} profile={profile.missing ? null : profile} onDone={(p) => setProfile({ id: user.uid, ...p })} />;
+  }
 
   const role = profile.role;
   const path = location.pathname;
@@ -78,6 +84,17 @@ function DashboardLayout() {
 
       <main className="px-4 pb-28 pt-6 sm:px-6 lg:ml-64 lg:px-10 lg:pb-12 lg:pt-10">
         <div className="mx-auto max-w-6xl">
+          {role === "mentor" && profile.mentorStatus === "pending" && (
+            <div className="mb-6 rounded-2xl bg-amber-50 px-5 py-4 text-sm text-amber-900 ring-1 ring-amber-200">
+              <b>Your mentor profile is being reviewed.</b> Students can't find you yet. We'll check your details and may
+              contact you at {profile.email}. Meanwhile, make sure your bio is complete.
+            </div>
+          )}
+          {profile.ageGroup === "minor" && profile.guardianStatus === "pending" && (
+            <div className="mb-6 rounded-2xl bg-primary-50 px-5 py-4 text-sm text-primary ring-1 ring-primary/20">
+              We'll contact your parent or guardian to confirm their consent. You can keep using MentoSpace in the meantime.
+            </div>
+          )}
           <Outlet context={ctx} />
         </div>
       </main>
