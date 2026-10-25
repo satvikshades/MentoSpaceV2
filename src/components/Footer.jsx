@@ -1,97 +1,35 @@
-import { FaGithub, FaLinkedin, FaTwitter } from "react-icons/fa";
-import { FiAlertCircle } from "react-icons/fi";
+import { Link } from "react-router-dom";
 
 function Footer() {
-  const currentYear = new Date().getFullYear();
-
+  const year = new Date().getFullYear();
   return (
-    <footer className="bg-gray-50 text-gray-700 shadow-inner mt-12 border-t border-gray-200">
-      <div className="max-w-7xl mx-auto px-6 py-10">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 items-start text-center md:text-left">
-          {/* Brand Information */}
-          <div className="space-y-2">
-            <h2 className="font-montserrat text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+    <footer className="border-t border-line bg-bg-light-gray">
+      <div className="mx-auto max-w-6xl px-5 py-14 sm:px-8">
+        <div className="flex flex-col justify-between gap-10 md:flex-row">
+          <div className="max-w-sm">
+            <Link to="/" className="wordmark text-2xl">
               MentoSpace<span className="text-secondary">.</span>
-            </h2>
-            <p className="text-sm text-gray-500">
-              Connecting mentors and mentees worldwide.
-            </p>
+            </Link>
+            <p className="mt-3 text-sm leading-relaxed text-muted">Building strong individuals, one check-in at a time.</p>
           </div>
-
-          {/* Notice / Alert - spans 2 cols on md */}
-          <div className="md:col-span-2">
-            <div className="flex items-start gap-3 bg-yellow-50 border-l-4 border-yellow-300 text-yellow-700 p-4 rounded">
-              <FiAlertCircle className="mt-0.5 h-5 w-5 text-yellow-600" />
-              <p className="text-sm leading-relaxed">
-                All the Data show here are fictional and for demonstration
-                purposes only. If matched with real persons, it is purely
-                coincidental.
-              </p>
-            </div>
-          </div>
-
-          {/* Quick Links */}
-          <div className="flex flex-col items-center md:items-start space-y-2 font-medium text-sm">
-            <a
-              href="#"
-              className="hover:text-primary transition-colors duration-200"
-              aria-label="About Us link"
-            >
-              About Us
-            </a>
-            <a
-              href="#"
-              className="hover:text-primary transition-colors duration-200"
-              aria-label="Contact link"
-            >
-              Contact
-            </a>
-            <a
-              href="#"
-              className="hover:text-primary transition-colors duration-200"
-              aria-label="Privacy Policy link"
-            >
-              Privacy Policy
-            </a>
-          </div>
-
-          {/* Social Media Icons */}
-          <div className="flex items-center justify-center md:justify-end space-x-4">
-            <a
-              href="#"
-              aria-label="Twitter"
-              className="text-gray-500 hover:text-blue-400 transition transform hover:-translate-y-0.5 duration-200"
-              rel="noopener noreferrer"
-            >
-              <FaTwitter className="h-6 w-6" />
-            </a>
-            <a
-              href="#"
-              aria-label="LinkedIn"
-              className="text-gray-500 hover:text-blue-600 transition transform hover:-translate-y-0.5 duration-200"
-              rel="noopener noreferrer"
-            >
-              <FaLinkedin className="h-6 w-6" />
-            </a>
-            <a
-              href="#"
-              aria-label="GitHub"
-              className="text-gray-500 hover:text-gray-900 transition transform hover:-translate-y-0.5 duration-200"
-              rel="noopener noreferrer"
-            >
-              <FaGithub className="h-6 w-6" />
-            </a>
+          <div className="grid grid-cols-2 gap-x-16 gap-y-3 text-sm font-semibold text-ink/70">
+            <a href="#how" className="hover:text-ink">How it works</a>
+            <Link to="/register" className="hover:text-ink">Create account</Link>
+            <a href="#programs" className="hover:text-ink">Programs</a>
+            <Link to="/login" className="hover:text-ink">Log in</Link>
+            <a href="#mentors" className="hover:text-ink">For mentors</a>
           </div>
         </div>
 
-        {/* Copyright notice at the bottom */}
-        <div className="mt-8 border-t border-gray-200 pt-6 text-center text-sm">
-          <p>© {currentYear} MentoSpace. All Rights Reserved.</p>
+        <div className="mt-12 rounded-2xl bg-white p-5 text-sm leading-relaxed text-ink/70 ring-1 ring-line">
+          MentoSpace is peer support, not a replacement for professional care. If you're in crisis, contact your local
+          emergency number. In India, Tele-MANAS is free and open 24/7 at{" "}
+          <a href="tel:14416" className="font-bold text-primary">14416</a>.
         </div>
-        <div className="mt-2">
-          <p className="text-center text-sm text-gray-400">
-            Made with ❤️ by MentoSpace Team
-          </p>
+
+        <div className="mt-8 flex flex-col justify-between gap-2 text-xs text-muted sm:flex-row">
+          <p>© {year} MentoSpace</p>
+          <p>Made by the MentoSpace team</p>
         </div>
       </div>
     </footer>
