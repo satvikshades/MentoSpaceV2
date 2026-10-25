@@ -1,107 +1,88 @@
-import { Outlet, Navigate, useLocation } from "react-router-dom";
-import { BiMenu } from "react-icons/bi";
 import { useEffect, useState } from "react";
+import { Link, Navigate, Outlet, useLocation } from "react-router-dom";
+import { onAuthStateChanged } from "firebase/auth";
+import { collection, doc, getDoc, onSnapshot, query, where } from "firebase/firestore";
+import { auth, db } from "../../firebase";
 import Sidebar from "./components/Sidebar";
 import BottomNav from "./components/BottomNav";
+import { Avatar, Spinner } from "../ui";
 
-import { auth, db } from "../../firebase";
-import { doc, getDoc } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
-
-import MoodInsights from "./components/MoodInsights";
+const STUDENT_ONLY = ["/dashboard/find-mentor", "/dashboard/habits", "/dashboard/mood"];
+const MENTOR_ONLY = ["/dashboard/my-students", "/dashboard/insights"];
 
 function DashboardLayout() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [role, setRole] = useState(null);
-  const [isAuthLoaded, setIsAuthLoaded] = useState(false);
-
-  const [showMoodPopup, setShowMoodPopup] = useState(false);
-
+  const [user, setUser] = useState(undefined);
+  const [profile, setProfile] = useState(null);
+  const [pending, setPending] = useState(0);
   const location = useLocation();
 
-  // AUTH LISTENER
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        setRole(null);
-        setIsAuthLoaded(true);
+    return onAuthStateChanged(auth, async (u) => {
+      if (!u) {
+        setUser(null);
         return;
       }
-
-      const snap = await getDoc(doc(db, "users", user.uid));
-      if (snap.exists()) setRole(snap.data().role);
-
-      setIsAuthLoaded(true);
+      try {
+        const snap = await getDoc(doc(db, "users", u.uid));
+        setProfile(snap.exists() ? { id: u.uid, ...snap.data() } : { id: u.uid, name: u.displayName, email: u.email, role: "student" });
+      } catch (err) {
+        console.error(err);
+        setProfile({ id: u.uid, name: u.displayName, email: u.email, role: "student" });
+      }
+      setUser(u);
     });
-
-    return () => unsubscribe();
   }, []);
 
-  if (!isAuthLoaded) return <div className="p-10 text-center">Loading...</div>;
-  if (!auth.currentUser) return <Navigate to="/login" replace />;
+  // live count of pending mentee requests for mentors
+  useEffect(() => {
+    if (!user || profile?.role !== "mentor") return;
+    const q = query(collection(db, "requests"), where("mentorId", "==", user.uid));
+    return onSnapshot(q, (s) => setPending(s.docs.filter((d) => d.data().status === "pending").length));
+  }, [user, profile?.role]);
 
-  // ROLE PROTECTION
-  if (role === "student" && location.pathname === "/dashboard/sessions") {
-    return <Navigate to="/dashboard/profile" replace />;
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
+
+  if (user === undefined || (user && !profile)) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-bg-light-gray text-primary">
+        <Spinner className="h-6 w-6" />
+      </div>
+    );
   }
-  if (role === "mentor" && location.pathname === "/dashboard/find-mentor") {
-    return <Navigate to="/dashboard/profile" replace />;
-  }
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+
+  const role = profile.role;
+  const path = location.pathname;
+  if (role === "mentor" && STUDENT_ONLY.some((p) => path.startsWith(p))) return <Navigate to="/dashboard" replace />;
+  if (role !== "mentor" && (MENTOR_ONLY.some((p) => path.startsWith(p)))) return <Navigate to="/dashboard" replace />;
+
+  const ctx = { user, profile, setProfile, role, pending };
 
   return (
-    <div className="relative min-h-screen bg-[#f0f2f5]">
+    <div className="min-h-screen bg-bg-light-gray">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-line bg-white lg:block">
+        <Sidebar role={role} profile={profile} pending={pending} />
+      </aside>
 
-      {/* ------------ DESKTOP SIDEBAR ------------ */}
-      <div className="hidden lg:block">
-        <div className="fixed inset-y-0 left-0 bg-white w-64 h-screen shadow-lg z-30">
-          <Sidebar role={role} />
-        </div>
-      </div>
-
-      {/* ------------ MOBILE SLIDE SIDEBAR ------------ */}
-      <div
-        className={`lg:hidden fixed inset-y-0 left-0 bg-white w-64 shadow-xl z-40 
-        transform transition-transform duration-300
-        ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
-      >
-        <Sidebar role={role} closeSidebar={() => setIsSidebarOpen(false)} />
-      </div>
-
-      {isSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/40 z-30 lg:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        ></div>
-      )}
-
-      {/* ------------ TOP BAR ------------ */}
-      <header className="sticky top-0 right-0 bg-[#f0f2f5]/80 backdrop-blur-sm p-4 z-10 flex items-center justify-between">
-
-        <button
-          className="cursor-pointer text-gray-700 hover:text-primary"
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        >
-          <BiMenu className="h-8 w-8" />
-        </button>
-
-        {role && (
-          <div className="px-4 py-1 bg-white/40 backdrop-blur-md border border-white/30 rounded-full shadow text-gray-800 font-semibold text-sm">
-            {role === "student" ? "Student Dashboard" : "Mentor Dashboard"}
-          </div>
-        )}
+      {/* mobile top bar */}
+      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-line/70 bg-white/85 px-4 py-3 backdrop-blur-md lg:hidden">
+        <Link to="/dashboard" className="wordmark text-xl">
+          MentoSpace<span className="text-secondary">.</span>
+        </Link>
+        <Link to="/dashboard/profile" aria-label="Your profile">
+          <Avatar person={profile} size={34} />
+        </Link>
       </header>
 
-      {/* ------------ MAIN CONTENT ------------ */}
-      <main className="p-4 lg:ml-64 pb-24">
-        <Outlet />
+      <main className="px-4 pb-28 pt-6 sm:px-6 lg:ml-64 lg:px-10 lg:pb-12 lg:pt-10">
+        <div className="mx-auto max-w-6xl">
+          <Outlet context={ctx} />
+        </div>
       </main>
 
-      {/* ------------ BOTTOM NAV ------------ */}
-      <div className="lg:hidden">
-        <BottomNav role={role} />
-      </div>
-
-      
+      <BottomNav role={role} pending={pending} />
     </div>
   );
 }
