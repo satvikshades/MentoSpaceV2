@@ -17,5 +17,5 @@ jobs:
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MENTOSPACE }}
-          projectId: mentospace
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MENTOSPACEV2 }}
+          projectId: mentospacev2
