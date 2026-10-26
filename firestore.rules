@@ -1,13 +1,14 @@
 rules_version = '2';
 
-// MentoSpace Firestore Security Rules (draft).
+// MentoSpace Firestore Security Rules.
 //
 // These rules are what actually protects the data: the app's own checks can
-// be bypassed by anyone with the browser console. Test them in Firebase
-// console → Firestore → Rules → "Rules Playground" before publishing, using a
-// student, a mentor and the admin account.
+// be bypassed by anyone with the browser console.
 //
-// The master admin is the Google-verified address below. Change it here AND
+// They are published to Firebase automatically by
+// .github/workflows/firestore-rules.yml whenever this file changes on main.
+//
+// The master admin is the verified email address below. Change it here AND
 // in src/lib/admin.js if it ever changes.
 
 service cloud.firestore {
