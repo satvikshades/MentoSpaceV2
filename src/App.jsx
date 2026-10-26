@@ -24,6 +24,7 @@ const MyStudents = lazy(() => import("./components/dashboard/components/MyStuden
 const Chats = lazy(() => import("./components/dashboard/components/Chats"));
 const ChatRoom = lazy(() => import("./components/dashboard/components/ChatRoom"));
 const MentorProfile = lazy(() => import("./pages/MentorProfile"));
+const MasterAdmin = lazy(() => import("./pages/admin/MasterAdmin"));
 
 function Loading() {
   return (
@@ -43,6 +44,7 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/privacy" element={<Privacy />} />
+        <Route path="/masteradmin/*" element={<MasterAdmin />} />
         <Route path="/verify-otp" element={<Navigate to="/login" replace />} />
 
         <Route element={<DashboardLayout />}>

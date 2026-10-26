@@ -19,6 +19,17 @@
   --color-muted: #6b6f80;
   --color-line: #e3e6ec;
 
+  /* master admin (gold) */
+  --color-onyx: #0c0b09;
+  --color-onyx-2: #14120f;
+  --color-onyx-3: #1c1915;
+  --color-gold-line: #2e2820;
+  --color-champagne: #f3ead7;
+  --color-sand: #a89d87;
+  --color-gold: #d4af37;
+  --color-gold-light: #f1d78a;
+  --color-gold-deep: #9c7a2a;
+
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Fraunces", Georgia, serif;
@@ -144,4 +155,41 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Master admin                                                        */
+/* ------------------------------------------------------------------ */
+@utility gold-text {
+  background: linear-gradient(120deg, #f8e7aa 0%, #d4af37 45%, #a3802d 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+@utility gold-btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-onyx transition active:scale-[0.97] disabled:opacity-50;
+  background: linear-gradient(135deg, #f6e3a1 0%, #d4af37 50%, #b08a32 100%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.45) inset, 0 8px 24px -10px rgba(212, 175, 55, 0.6);
+}
+@utility gold-ghost {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-champagne ring-1 ring-gold-line transition hover:bg-onyx-3 hover:ring-gold/40 active:scale-[0.97] disabled:opacity-50;
+}
+@utility gold-danger {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-red-300 ring-1 ring-red-400/25 transition hover:bg-red-500/10 active:scale-[0.97] disabled:opacity-50;
+}
+@utility gold-panel {
+  @apply rounded-2xl border border-gold-line bg-onyx-2;
+}
+@utility gold-field {
+  @apply w-full rounded-xl border border-gold-line bg-onyx px-3.5 py-2.5 text-sm text-champagne outline-none transition placeholder:text-sand/50 focus:border-gold/60 focus:ring-4 focus:ring-gold/10;
+}
+.admin-root h1,
+.admin-root h2,
+.admin-root h3 {
+  color: inherit;
+}
+.admin-grain {
+  background-image:
+    radial-gradient(1200px 500px at 85% -10%, rgba(212, 175, 55, 0.10), transparent 60%),
+    radial-gradient(800px 400px at -10% 110%, rgba(212, 175, 55, 0.06), transparent 60%);
 }
