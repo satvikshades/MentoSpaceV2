@@ -28,7 +28,11 @@ function DashboardLayout() {
       }
       try {
         const snap = await getDoc(doc(db, "users", u.uid));
-        setProfile(snap.exists() ? { id: u.uid, ...snap.data() } : { id: u.uid, name: u.displayName, email: u.email, missing: true });
+        if (snap.exists()) setProfile({ id: u.uid, ...snap.data() });
+        else {
+          const rep = await getDoc(doc(db, "sales_reps", u.uid)).catch(() => null);
+          setProfile({ id: u.uid, name: u.displayName, email: u.email, missing: true, salesRep: !!rep?.exists() });
+        }
       } catch (err) {
         console.error(err);
         setProfile({ id: u.uid, name: u.displayName, email: u.email, missing: true });
@@ -56,6 +60,8 @@ function DashboardLayout() {
     );
   }
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+
+  if (profile.missing && profile.salesRep) return <Navigate to="/sales" replace />;
 
   if (profile.status === "suspended" || profile.status === "removed") {
     return (

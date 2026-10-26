@@ -58,7 +58,7 @@ export async function audit(action, target = {}, details = {}) {
 /* Loading                                                             */
 /* ------------------------------------------------------------------ */
 
-const COLLECTIONS = ["users", "moods", "habits", "habit_logs", "requests", "sessions", "chats", "consent_logs", "admin_audit"];
+const COLLECTIONS = ["users", "moods", "habits", "habit_logs", "requests", "sessions", "chats", "consent_logs", "admin_audit", "sales_reps", "sales_leads"];
 
 export async function loadEverything() {
   const results = await Promise.all(

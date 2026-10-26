@@ -14,6 +14,7 @@ import {
   FiMenu,
   FiRefreshCw,
   FiShield,
+  FiTrendingUp,
   FiUsers,
 } from "react-icons/fi";
 import { auth } from "../../firebase";
@@ -32,12 +33,14 @@ import {
   SessionsSection,
 } from "./AdminSections";
 import { useDerived } from "../../lib/adminDerive";
+import { SalesSection } from "./AdminSales";
 
 const NAV = [
   { key: "overview", label: "Overview", icon: FiGrid },
   { key: "approvals", label: "Approvals", icon: FiCheckSquare, badge: "pendingMentors" },
   { key: "people", label: "People", icon: FiUsers },
   { key: "safety", label: "Safety", icon: FiAlertTriangle, badge: "safetyCount" },
+  { key: "sales", label: "Sales team", icon: FiTrendingUp, badge: "salesAlerts" },
   { key: "connections", label: "Connections", icon: FiLink },
   { key: "sessions", label: "Sessions", icon: FiCalendar },
   { key: "consent", label: "Consent records", icon: FiFileText },
@@ -321,6 +324,7 @@ export default function MasterAdmin() {
               {tab === "approvals" && <ApprovalsSection {...sectionProps} />}
               {tab === "people" && <PeopleSection {...sectionProps} />}
               {tab === "safety" && <SafetySection {...sectionProps} />}
+              {tab === "sales" && <SalesSection {...sectionProps} />}
               {tab === "connections" && <ConnectionsSection {...sectionProps} />}
               {tab === "sessions" && <SessionsSection {...sectionProps} />}
               {tab === "consent" && <ConsentSection {...sectionProps} />}

@@ -19,6 +19,7 @@ function Footer() {
             <Link to="/login" className="hover:text-ink">Log in</Link>
             <a href="#mentors" className="hover:text-ink">For mentors</a>
             <Link to="/privacy" className="hover:text-ink">Privacy and consent</Link>
+            <Link to="/sales" className="hover:text-ink">Join our sales team</Link>
           </div>
         </div>
 
