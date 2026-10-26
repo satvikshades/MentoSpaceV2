@@ -1,0 +1,151 @@
+rules_version = '2';
+
+// MentoSpace Firestore Security Rules (draft).
+//
+// These rules are what actually protects the data: the app's own checks can
+// be bypassed by anyone with the browser console. Test them in Firebase
+// console → Firestore → Rules → "Rules Playground" before publishing, using a
+// student, a mentor and the admin account.
+//
+// The master admin is the Google-verified address below. Change it here AND
+// in src/lib/admin.js if it ever changes.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.email == 'ssatviks@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+
+    function userPath(uid) { return /databases/$(database)/documents/users/$(uid); }
+
+    // false for suspended or removed accounts
+    function active() {
+      return signedIn() && (
+        !exists(userPath(request.auth.uid)) ||
+        !(get(userPath(request.auth.uid)).data.get('status', 'active') in ['suspended', 'removed'])
+      );
+    }
+
+    function isMentorOf(studentId) {
+      return studentId in get(userPath(request.auth.uid)).data.get('myStudents', []);
+    }
+
+    function changes(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(keys);
+    }
+
+    // ---------------------------------------------------------------- users
+    match /users/{uid} {
+      allow read: if signedIn();
+
+      allow create: if isAdmin() || (
+        request.auth.uid == uid
+        && !('status' in request.resource.data)
+        && request.resource.data.get('mentorStatus', 'pending') == 'pending'
+        && request.resource.data.get('guardianStatus', 'pending') == 'pending'
+        && request.resource.data.get('role', 'student') in ['student', 'mentor']
+      );
+
+      allow update: if isAdmin() || (
+        request.auth.uid == uid
+        && !(resource.data.get('status', 'active') in ['suspended', 'removed'])
+        && !changes(['status', 'statusReason', 'statusAt', 'mentorReview'])
+        && (!changes(['mentorStatus']) || request.resource.data.mentorStatus == 'pending')
+        && (!changes(['guardianStatus']) || request.resource.data.guardianStatus == 'pending')
+        && (!changes(['role']) || !('role' in resource.data))
+      );
+
+      allow delete: if isAdmin() || request.auth.uid == uid;
+    }
+
+    // ---------------------------------------------------------------- moods
+    match /moods/{id} {
+      allow read: if isAdmin()
+        || resource.data.studentId == request.auth.uid
+        || (signedIn()
+            && isMentorOf(resource.data.studentId)
+            && get(userPath(resource.data.studentId)).data.get('consent', {}).get('shareMoods', false) == true);
+      allow create: if active() && request.resource.data.studentId == request.auth.uid;
+      allow update: if false;
+      allow delete: if isAdmin() || resource.data.studentId == request.auth.uid;
+    }
+
+    // ---------------------------------------------------------- habits & logs
+    match /habits/{id} {
+      allow read, update, delete: if isAdmin() || resource.data.studentId == request.auth.uid;
+      allow create: if active() && request.resource.data.studentId == request.auth.uid;
+    }
+    match /habit_logs/{id} {
+      allow read, delete: if isAdmin() || resource.data.studentId == request.auth.uid;
+      allow create: if active() && request.resource.data.studentId == request.auth.uid;
+      allow update: if false;
+    }
+
+    // ------------------------------------------------------------- requests
+    match /requests/{id} {
+      allow read: if isAdmin()
+        || resource.data.studentId == request.auth.uid
+        || resource.data.mentorId == request.auth.uid;
+      allow create: if isAdmin() || (
+        active()
+        && request.resource.data.studentId == request.auth.uid
+        && request.resource.data.status == 'pending'
+      );
+      allow update: if isAdmin() || (
+        active()
+        && resource.data.mentorId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+      );
+      allow delete: if isAdmin() || resource.data.studentId == request.auth.uid;
+    }
+
+    // ------------------------------------------------------------- sessions
+    match /sessions/{id} {
+      allow read: if signedIn();
+      allow create: if active()
+        && request.resource.data.mentorId == request.auth.uid
+        && get(userPath(request.auth.uid)).data.role == 'mentor';
+      allow update: if isAdmin() || resource.data.mentorId == request.auth.uid;
+      allow delete: if isAdmin() || resource.data.mentorId == request.auth.uid;
+    }
+
+    // ---------------------------------------------------------------- chats
+    match /chats/{chatId} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid in resource.data.members);
+      allow create: if isAdmin() || (active() && request.auth.uid in request.resource.data.members);
+      allow update, delete: if isAdmin();
+
+      match /messages/{messageId} {
+        function members() { return get(/databases/$(database)/documents/chats/$(chatId)).data.members; }
+        allow read: if isAdmin() || (signedIn() && request.auth.uid in members());
+        allow create: if active()
+          && request.auth.uid in members()
+          && request.resource.data.senderId == request.auth.uid;
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+    }
+
+    // ------------------------------------------------- consent and audit logs
+    match /consent_logs/{id} {
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /admin_audit/{id} {
+      allow create, read: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    // everything else is closed
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
