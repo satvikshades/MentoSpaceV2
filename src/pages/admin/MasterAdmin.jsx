@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import { onAuthStateChanged, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import toast from "react-hot-toast";
 import {
   FiActivity,
@@ -17,7 +17,8 @@ import {
   FiUsers,
 } from "react-icons/fi";
 import { auth } from "../../firebase";
-import { IDLE_LOCK_MINUTES, isAdminUser, loadEverything } from "../../lib/admin";
+import { ADMIN_EMAILS, IDLE_LOCK_MINUTES, isAdminUser, loadEverything } from "../../lib/admin";
+import { PasswordInput } from "../../components/AuthShell";
 import { Crest } from "./AdminUI";
 import {
   ApprovalsSection,
@@ -61,30 +62,60 @@ function useNoIndex() {
   }, []);
 }
 
-function Gate({ user, message, onSignIn, busy }) {
+const maskEmail = (e) => e.replace(/^(.)(.*)(.@.*)$/, (_, a, mid, c) => a + "•".repeat(Math.max(3, mid.length)) + c);
+
+function Gate({ user, message, notice, onSignIn, onForgot, busy }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   return (
     <div className="admin-root admin-grain grid min-h-screen place-items-center bg-onyx px-5 text-champagne">
-      <div className="w-full max-w-sm text-center animate-rise">
-        <div className="mx-auto grid h-20 w-20 place-items-center rounded-3xl bg-onyx-2 ring-1 ring-gold-line">
-          <Crest size={44} />
+      <div className="w-full max-w-sm animate-rise">
+        <div className="text-center">
+          <div className="mx-auto grid h-20 w-20 place-items-center rounded-3xl bg-onyx-2 ring-1 ring-gold-line">
+            <Crest size={44} />
+          </div>
+          <p className="mt-8 text-[11px] font-bold uppercase tracking-[0.3em] text-gold">Restricted</p>
+          <h1 className="mt-2 font-serif text-[40px] font-medium leading-tight">
+            <span className="gold-text">Master</span> console
+          </h1>
+          <p className="mx-auto mt-3 max-w-xs text-sm leading-relaxed text-sand">For authorised administrators only. Every action here is recorded.</p>
         </div>
-        <p className="mt-8 text-[11px] font-bold uppercase tracking-[0.3em] text-gold">Restricted</p>
-        <h1 className="mt-2 font-serif text-[40px] font-medium leading-tight">
-          <span className="gold-text">Master</span> console
-        </h1>
-        <p className="mx-auto mt-3 max-w-xs text-sm leading-relaxed text-sand">
-          For authorised administrators only. Every action here is recorded.
-        </p>
+
         {message && <p className="mt-6 rounded-xl bg-red-400/10 px-4 py-3 text-sm text-red-300 ring-1 ring-red-400/20">{message}</p>}
-        <button onClick={onSignIn} disabled={busy} className="gold-btn mt-8 w-full py-3.5 text-[15px]">
-          {busy ? "Opening Google…" : user ? "Use a different Google account" : "Sign in with Google"}
-        </button>
-        {user && (
-          <button onClick={() => signOut(auth)} className="mt-3 text-xs font-semibold text-sand hover:text-champagne">
+        {notice && <p className="mt-6 rounded-xl bg-gold/10 px-4 py-3 text-sm text-gold-light ring-1 ring-gold/25">{notice}</p>}
+
+        {user ? (
+          <button onClick={() => signOut(auth)} className="gold-btn mt-8 w-full py-3.5 text-[15px]">
             Sign out of {user.email}
           </button>
+        ) : (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              onSignIn(email, password);
+            }}
+            className="admin-login mt-8 space-y-3"
+          >
+            <input
+              id="admin-email"
+              type="email"
+              autoComplete="username"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="gold-field py-3"
+              aria-label="Email"
+            />
+            <PasswordInput id="admin-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" autoComplete="current-password" />
+            <button disabled={busy || !email || !password} className="gold-btn w-full py-3.5 text-[15px]">
+              {busy ? "Checking…" : "Sign in"}
+            </button>
+            <button type="button" onClick={onForgot} disabled={busy} className="block w-full pt-2 text-center text-xs font-semibold text-sand hover:text-gold-light">
+              Forgot password? Send a reset link to {maskEmail(ADMIN_EMAILS[0])}
+            </button>
+          </form>
         )}
-        <p className="mt-10 text-[11px] text-sand/60">Sessions lock after {IDLE_LOCK_MINUTES} minutes without activity.</p>
+        <p className="mt-10 text-center text-[11px] text-sand/60">Sessions lock after {IDLE_LOCK_MINUTES} minutes without activity.</p>
       </div>
     </div>
   );
@@ -95,6 +126,7 @@ export default function MasterAdmin() {
   const [user, setUser] = useState(undefined);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [notice, setNotice] = useState("");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState("overview");
@@ -141,22 +173,47 @@ export default function MasterAdmin() {
     };
   }, [admin]);
 
-  const signIn = async () => {
+  const signIn = async (email, password) => {
+    setBusy(true);
+    setMessage("");
+    setNotice("");
+    const generic = "Email or password is incorrect.";
+    try {
+      // Only the admin address is ever sent to Firebase from this page.
+      if (!ADMIN_EMAILS.includes(email.trim().toLowerCase())) {
+        await new Promise((r) => setTimeout(r, 600));
+        setMessage(generic);
+        return;
+      }
+      const { user: u } = await signInWithEmailAndPassword(auth, email.trim(), password);
+      if (!u.emailVerified) {
+        await sendEmailVerification(u);
+        await signOut(auth);
+        setNotice(`Almost there. We sent a verification link to ${maskEmail(u.email)}. Open it, then sign in again.`);
+      }
+    } catch (err) {
+      const code = err?.code || "";
+      setMessage(
+        code.includes("too-many-requests")
+          ? "Too many attempts. Wait a few minutes, or reset the password."
+          : code.includes("network")
+          ? "You seem to be offline."
+          : generic
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const forgot = async () => {
     setBusy(true);
     setMessage("");
     try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: "select_account" });
-      const { user: u } = await signInWithPopup(auth, provider);
-      if (!isAdminUser(u)) {
-        await signOut(auth);
-        setMessage("That account doesn't have access to this console.");
-      }
-    } catch (err) {
-      if (err?.code !== "auth/popup-closed-by-user" && err?.code !== "auth/cancelled-popup-request") {
-        setMessage(err?.code === "auth/unauthorized-domain" ? "This website isn't in Firebase's authorised domains yet." : "Sign-in didn't work. Try again.");
-      }
+      await sendPasswordResetEmail(auth, ADMIN_EMAILS[0]);
+    } catch {
+      /* same message either way */
     } finally {
+      setNotice(`If the admin account exists, a reset link is on its way to ${maskEmail(ADMIN_EMAILS[0])}. It can take a minute and may land in spam.`);
       setBusy(false);
     }
   };
@@ -167,7 +224,16 @@ export default function MasterAdmin() {
     return <div className="min-h-screen bg-onyx" />;
 
   if (!admin)
-    return <Gate user={user} message={message || (user ? "This account doesn't have access to this console." : "")} onSignIn={signIn} busy={busy} />;
+    return (
+      <Gate
+        user={user}
+        message={message || (user ? "This account doesn't have access to this console." : "")}
+        notice={notice}
+        onSignIn={signIn}
+        onForgot={forgot}
+        busy={busy}
+      />
+    );
 
   const go = (k) => {
     setTab(k);
