@@ -8,6 +8,8 @@ import BottomNav from "./components/BottomNav";
 import { Avatar, Spinner } from "../ui";
 import ConsentGate from "./components/ConsentGate";
 import { needsConsent } from "../../lib/consent";
+import { Helplines } from "../ConsentForm";
+import { logout } from "../../lib/session";
 
 const STUDENT_ONLY = ["/dashboard/find-mentor", "/dashboard/habits", "/dashboard/mood"];
 const MENTOR_ONLY = ["/dashboard/my-students", "/dashboard/insights"];
@@ -55,6 +57,30 @@ function DashboardLayout() {
   }
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
 
+  if (profile.status === "suspended" || profile.status === "removed") {
+    return (
+      <div className="grid min-h-screen place-items-center bg-bg-light-gray px-5">
+        <div className="card max-w-md p-8 text-center">
+          <h1 className="text-2xl font-extrabold">
+            {profile.status === "removed" ? "This account has been closed" : "Your account is paused"}
+          </h1>
+          <p className="mt-3 text-[15px] leading-relaxed text-muted">
+            {profile.status === "removed"
+              ? "This account is no longer active on MentoSpace."
+              : "An administrator has paused this account. If you think this is a mistake, contact our Grievance Officer through the privacy page."}
+          </p>
+          <div className="mt-5 text-left">
+            <Helplines compact />
+          </div>
+          <div className="mt-6 flex justify-center gap-2">
+            <Link to="/privacy" className="btn-ghost">Privacy page</Link>
+            <button onClick={logout} className="btn-primary">Log out</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (needsConsent(profile)) {
     return <ConsentGate user={user} profile={profile.missing ? null : profile} onDone={(p) => setProfile({ id: user.uid, ...p })} />;
   }
@@ -88,6 +114,13 @@ function DashboardLayout() {
             <div className="mb-6 rounded-2xl bg-amber-50 px-5 py-4 text-sm text-amber-900 ring-1 ring-amber-200">
               <b>Your mentor profile is being reviewed.</b> Students can't find you yet. We'll check your details and may
               contact you at {profile.email}. Meanwhile, make sure your bio is complete.
+            </div>
+          )}
+          {role === "mentor" && profile.mentorStatus === "rejected" && (
+            <div className="mb-6 rounded-2xl bg-red-50 px-5 py-4 text-sm text-red-800 ring-1 ring-red-200">
+              <b>Your mentor application wasn't approved.</b>
+              {profile.mentorReview?.note ? ` Reason: ${profile.mentorReview.note}.` : ""} Students can't find your profile. Contact
+              our Grievance Officer through the privacy page if you'd like it reviewed again.
             </div>
           )}
           {profile.ageGroup === "minor" && profile.guardianStatus === "pending" && (

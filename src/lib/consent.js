@@ -32,5 +32,6 @@ export function sharesMoods(student) {
 
 /** Mentors are visible to students only once an admin has verified them. */
 export function mentorIsLive(mentor) {
+  if (mentor?.status === "suspended" || mentor?.status === "removed") return false;
   return mentor?.mentorStatus === "verified" || mentor?.mentorStatus === undefined;
 }

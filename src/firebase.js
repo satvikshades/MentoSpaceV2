@@ -47,6 +47,7 @@ async function createUserDoc(uid, data) {
 }
 
 export {
+  firebaseConfig,
   auth,
   db,
   storage,            // <<--- exported
