@@ -61,6 +61,9 @@ export function useDerived(data) {
       signups,
       moodMix,
       suspended: live.filter((u) => u.status === "suspended").length,
+      salesAlerts:
+        (data.sales_reps || []).filter((r) => r.status === "pending").length +
+        (data.sales_leads || []).filter((l) => l.stage === 3 && !l.contractVerified && !l.lost).length,
       lastLoaded: new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }),
     };
   }, [data]);
