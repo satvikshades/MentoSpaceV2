@@ -1,81 +1,94 @@
 import { useEffect, useState } from "react";
-import { auth, db } from "../../../firebase";
-import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, where } from "firebase/firestore";
+import { FiChevronRight } from "react-icons/fi";
+import { db } from "../../../firebase";
+import { useDashboard } from "../../../lib/useProgress";
+import { timeAgo, toDate } from "../../../lib/progress";
+import { Avatar, EmptyState, PageHeader, Skeleton } from "../../ui";
 
 function Chats() {
-  const [chatList, setChatList] = useState([]);
-  const navigate = useNavigate();
-  const user = auth.currentUser;
+  const { user, role } = useDashboard();
+  const [chats, setChats] = useState(null);
 
   useEffect(() => {
-    if (!user) return;
-
-    async function loadChats() {
-      const q = query(
-        collection(db, "chats"),
-        where("members", "array-contains", user.uid)
-      );
-
-      const snap = await getDocs(q);
-
-      const chats = [];
-
-      for (const chatDoc of snap.docs) {
-        const data = chatDoc.data();
-
-        // Find the other user's ID
-        const otherUserId = data.members.find((m) => m !== user.uid);
-
-        // Fetch other user's info
-        const userSnap = await getDoc(doc(db, "users", otherUserId));
-        const otherUser = userSnap.exists() ? userSnap.data() : {};
-
-        chats.push({
-          chatId: chatDoc.id,
-          otherUserName: otherUser.name || "Unknown User",
-          otherUserPic:
-            otherUser.profilePic ||
-            `https://ui-avatars.com/api/?name=${encodeURIComponent(
-              otherUser.name || "User"
-            )}`,
-        });
+    (async () => {
+      try {
+        const snap = await getDocs(query(collection(db, "chats"), where("members", "array-contains", user.uid)));
+        const rows = await Promise.all(
+          snap.docs.map(async (c) => {
+            const data = c.data();
+            const otherId = data.members.find((m) => m !== user.uid);
+            const [u, last] = await Promise.all([
+              getDoc(doc(db, "users", otherId)),
+              getDocs(query(collection(db, "chats", c.id, "messages"), orderBy("timestamp", "desc"), limit(1))),
+            ]);
+            const msg = last.docs[0]?.data();
+            return {
+              id: c.id,
+              other: u.exists() ? { id: otherId, ...u.data() } : { id: otherId, name: data.userNames?.[otherId] || "Someone" },
+              last: msg || null,
+              at: toDate(msg?.timestamp) || toDate(data.createdAt) || new Date(0),
+            };
+          })
+        );
+        rows.sort((a, b) => b.at - a.at);
+        setChats(rows);
+      } catch (err) {
+        console.error(err);
+        setChats([]);
       }
-
-      setChatList(chats);
-    }
-
-    loadChats();
-  }, [user]);
+    })();
+  }, [user.uid]);
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-gray-800">Chats</h1>
-
-      <div className="bg-white p-4 rounded-lg shadow space-y-4">
-        {chatList.length === 0 ? (
-          <p className="text-gray-500">No chats yet.</p>
-        ) : (
-          chatList.map((chat) => (
-            <div
-              key={chat.chatId}
-              onClick={() => navigate(`/dashboard/chat/${chat.chatId}`)}
-              className="flex items-center gap-4 p-4 border rounded-lg hover:bg-gray-100 cursor-pointer"
-            >
-              <img
-                src={chat.otherUserPic}
-                className="w-12 h-12 rounded-full"
-                alt="User"
-              />
-
-              <div>
-                <h2 className="font-semibold text-lg">{chat.otherUserName}</h2>
-                <p className="text-sm text-gray-500">Tap to continue chat</p>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+    <div className="mx-auto max-w-3xl">
+      <PageHeader eyebrow="Messages" title="Conversations" />
+      {!chats ? (
+        <div className="space-y-2">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-[76px]" />
+          ))}
+        </div>
+      ) : chats.length === 0 ? (
+        <EmptyState
+          icon="💬"
+          title="No conversations yet"
+          body={
+            role === "mentor"
+              ? "Accept a student's request and a conversation opens here."
+              : "Once a mentor accepts your request, you can message them here."
+          }
+          action={
+            role === "mentor" ? (
+              <Link to="/dashboard/my-students" className="btn-primary">See requests</Link>
+            ) : (
+              <Link to="/dashboard/find-mentor" className="btn-primary">Find a mentor</Link>
+            )
+          }
+        />
+      ) : (
+        <div className="card divide-y divide-line overflow-hidden">
+          {chats.map((c) => {
+            const mine = c.last?.senderId === user.uid;
+            return (
+              <Link key={c.id} to={`/dashboard/chat/${c.id}`} className="flex items-center gap-4 px-4 py-4 transition hover:bg-bg-light-gray sm:px-5">
+                <Avatar person={c.other} size={48} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="truncate font-bold">{c.other.name}</p>
+                    {c.last && <span className="shrink-0 text-xs text-muted">{timeAgo(c.last.timestamp)}</span>}
+                  </div>
+                  <p className="truncate text-sm text-muted">
+                    {c.last ? `${mine ? "You: " : ""}${c.last.text}` : "Say hello 👋"}
+                  </p>
+                </div>
+                <FiChevronRight className="shrink-0 text-muted" />
+              </Link>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

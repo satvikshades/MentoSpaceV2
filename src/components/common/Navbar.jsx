@@ -1,43 +1,56 @@
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "../../firebase";
 
 function Navbar() {
-  const navigate = useNavigate();
+  const [scrolled, setScrolled] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => onAuthStateChanged(auth, (u) => setSignedIn(!!u)), []);
 
   return (
-    <>
-      <nav className="fixed top-0 left-0 w-full bg-white shadow-md z-[999]">
-        <div className="flex justify-between items-center max-w-7xl mx-auto px-6 md:px-14 py-4">
-          <div className="flex flex-col items-start">
-            <Link to="/">
-              <h1 className="font-montserrat text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent tracking-tighter leading-none">
-                MentoSpace<span className="text-secondary">.</span>
-              </h1>
-            </Link>
-            <p className="font-poppins text-sm font-medium text-text-dark mt-1 opacity-90">
-              Building strong individuals
-            </p>
-          </div>
-          <div className="flex items-center gap-5">
-            {/* <div className="hidden md:block text-right font-poppins text-sm text-text-dark">
-              <p className="leading-tight">Reach out to us at:</p>
-              <p className="leading-tight">permanentwofliving@gmail.com</p>
-            </div> */}
-            <button
-              onClick={() => navigate("/login")}
-              className="inline-block px-6 py-2.5 bg-white text-primary font-semibold text-base rounded-full border-2 border-primary transition-transform duration-300 ease-in-out hover:-translate-y-0.5 cursor-pointer"
-            >
-              Login
-            </button>
-            <button
-              onClick={() => navigate("/register")}
-              className="inline-block px-6 py-2.5 bg-primary text-white font-semibold text-base rounded-full transition-transform duration-300 ease-in-out hover:-translate-y-0.5 cursor-pointer"
-            >
-              Register
-            </button>
-          </div>
+    <nav
+      className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
+        scrolled ? "border-b border-line bg-white/85 backdrop-blur-md" : "border-b border-transparent bg-transparent"
+      }`}
+    >
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4 sm:px-8">
+        <Link to="/" className="wordmark text-[22px] sm:text-2xl">
+          MentoSpace<span className="text-secondary">.</span>
+        </Link>
+
+        <div className="hidden items-center gap-8 text-[15px] font-semibold text-ink/70 md:flex">
+          <a href="#how" className="transition hover:text-ink">How it works</a>
+          <a href="#programs" className="transition hover:text-ink">Programs</a>
+          <a href="#mentors" className="transition hover:text-ink">For mentors</a>
         </div>
-      </nav>
-    </>
+
+        <div className="flex items-center gap-2">
+          {signedIn ? (
+            <Link to="/dashboard" className="btn-primary px-4 py-2 text-sm sm:text-[15px]">
+              Open dashboard
+            </Link>
+          ) : (
+            <>
+              <Link to="/login" className="btn px-3 py-2 text-sm text-ink/80 hover:text-ink sm:text-[15px]">
+                Log in
+              </Link>
+              <Link to="/register" className="btn-primary px-4 py-2 text-sm sm:text-[15px]">
+                Get started
+              </Link>
+            </>
+          )}
+        </div>
+      </div>
+    </nav>
   );
 }
 

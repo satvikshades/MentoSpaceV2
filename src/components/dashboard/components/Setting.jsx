@@ -1,201 +1,225 @@
-import React, { useState } from "react";
-import {
-  FaLock,
-  FaBell,
-  FaTrash,
-  FaEnvelope,
-  FaNewspaper,
-} from "react-icons/fa";
-import { FaFloppyDisk } from "react-icons/fa6";
+import { useState } from "react";
+import toast from "react-hot-toast";
+import { addDoc, collection, doc, deleteDoc, serverTimestamp, updateDoc } from "firebase/firestore";
+import { Link } from "react-router-dom";
+import { deleteUser, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "firebase/auth";
+import { FiLock, FiBell, FiLogOut, FiAlertTriangle, FiShield } from "react-icons/fi";
+import { ORG } from "../../../lib/legal";
+import { db } from "../../../firebase";
+import { useDashboard } from "../../../lib/useProgress";
+import { Modal, PageHeader, Spinner } from "../../ui";
+import { logout } from "../../../lib/session";
 
-// A reusable toggle switch component for notification settings
-const ToggleSwitch = ({ id, label, icon, enabled, setEnabled }) => (
-  <div className="flex items-center justify-between py-4 border-b border-gray-200">
-    <div className="flex items-center gap-4">
-      <div className="text-gray-500">{icon}</div>
-      <label htmlFor={id} className="font-medium text-gray-700">
-        {label}
-      </label>
-    </div>
-    <button
-      id={id}
-      onClick={() => setEnabled(!enabled)}
-      className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary
-                 ${enabled ? "bg-primary" : "bg-gray-300"}`}
-    >
-      <span
-        className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform duration-300
-                   ${enabled ? "translate-x-6" : "translate-x-1"}`}
-      />
-    </button>
-  </div>
-);
+function Toggle({ label, hint, checked, onChange }) {
+  return (
+    <label className="flex cursor-pointer items-center justify-between gap-4 py-4">
+      <span>
+        <span className="block font-semibold">{label}</span>
+        {hint && <span className="block text-sm text-muted">{hint}</span>}
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={`relative h-7 w-12 shrink-0 rounded-full transition ${checked ? "bg-primary" : "bg-bg-medium-gray"}`}
+      >
+        <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${checked ? "left-6" : "left-1"}`} />
+      </button>
+    </label>
+  );
+}
 
 function Setting() {
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-  });
-  const [message, setMessage] = useState({ text: "", type: "" });
+  const { user, profile, setProfile } = useDashboard();
+  const usesPassword = user.providerData.some((p) => p.providerId === "password");
+  const [pw, setPw] = useState({ current: "", next: "", confirm: "" });
+  const [pwBusy, setPwBusy] = useState(false);
+  const [del, setDel] = useState(false);
+  const [delText, setDelText] = useState("");
+  const [delPw, setDelPw] = useState("");
+  const [delBusy, setDelBusy] = useState(false);
+  const prefs = { reminders: true, ...(profile.prefs || {}) };
 
-  // State for notification toggles
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [newsletter, setNewsletter] = useState(false);
-
-  const handlePasswordChange = (e) => {
-    const { name, value } = e.target;
-    setPasswordData((prev) => ({ ...prev, [name]: value }));
+  const setPref = async (key, value) => {
+    const next = { ...prefs, [key]: value };
+    setProfile((p) => ({ ...p, prefs: next }));
+    try {
+      await updateDoc(doc(db, "users", user.uid), { prefs: next });
+    } catch {
+      toast.error("Couldn't save that setting.");
+    }
   };
 
-  const handlePasswordSubmit = (e) => {
+  const setShareMoods = async (value) => {
+    const consent = { ...(profile.consent || {}), shareMoods: value };
+    setProfile((p) => ({ ...p, consent }));
+    try {
+      await updateDoc(doc(db, "users", user.uid), { "consent.shareMoods": value });
+      addDoc(collection(db, "consent_logs"), {
+        uid: user.uid,
+        version: consent.version || null,
+        change: value ? "granted shareMoods" : "withdrew shareMoods",
+        savedAt: serverTimestamp(),
+      }).catch(() => {});
+      toast.success(value ? "Your mentor can now see your check-ins" : "Your check-ins are now private");
+    } catch {
+      setProfile((p) => ({ ...p, consent: { ...consent, shareMoods: !value } }));
+      toast.error("Couldn't save that setting.");
+    }
+  };
+
+  const agreedOn = profile.consent?.acceptedAt
+    ? new Date(profile.consent.acceptedAt).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })
+    : null;
+
+  const changePassword = async (e) => {
     e.preventDefault();
-    setMessage({ text: "", type: "" }); // Clear previous messages
-
-    // Basic validation
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setMessage({ text: "New passwords do not match.", type: "error" });
-      return;
+    if (pw.next.length < 8) return toast.error("Use at least 8 characters.");
+    if (pw.next !== pw.confirm) return toast.error("The new passwords don't match.");
+    setPwBusy(true);
+    try {
+      await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, pw.current));
+      await updatePassword(user, pw.next);
+      setPw({ current: "", next: "", confirm: "" });
+      toast.success("Password changed");
+    } catch (err) {
+      const code = err.code || "";
+      toast.error(
+        code.includes("wrong-password") || code.includes("invalid-credential")
+          ? "Your current password is wrong."
+          : code.includes("weak-password")
+          ? "Pick a stronger password."
+          : "Couldn't change your password."
+      );
+    } finally {
+      setPwBusy(false);
     }
-    if (passwordData.newPassword.length < 8) {
-      setMessage({
-        text: "Password must be at least 8 characters long.",
-        type: "error",
-      });
-      return;
-    }
-
-    // Simulate API call
-    console.log("Updating password:", passwordData);
-    setMessage({ text: "Password updated successfully!", type: "success" });
-    setPasswordData({
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    }); // Clear fields
-
-    setTimeout(() => setMessage({ text: "", type: "" }), 4000);
   };
 
-  const handleDeleteAccount = () => {
-    // In a real app, this should open a confirmation modal.
-    if (
-      window.confirm(
-        "Are you sure you want to delete your account? This action is irreversible."
-      )
-    ) {
-      console.log("Account deletion initiated...");
-      // Add logic to call the API for account deletion
-      alert("Your account has been scheduled for deletion.");
+  const deleteAccount = async () => {
+    setDelBusy(true);
+    try {
+      if (usesPassword) await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, delPw));
+      await deleteDoc(doc(db, "users", user.uid));
+      await deleteUser(user);
+      window.location.href = "/";
+    } catch (err) {
+      console.error(err);
+      toast.error(
+        err.code === "auth/requires-recent-login"
+          ? "For safety, log out and back in, then try again."
+          : err.code?.includes("credential") || err.code?.includes("password")
+          ? "That password is wrong."
+          : "Couldn't delete your account."
+      );
+      setDelBusy(false);
     }
   };
 
   return (
-    <div className="space-y-8 max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold text-gray-800">Settings</h1>
+    <div className="mx-auto max-w-2xl space-y-5">
+      <PageHeader eyebrow="Settings" title="Your account" />
 
-      {/* --- Change Password Section --- */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <h2 className="text-xl font-semibold text-gray-700 mb-4 border-b border-gray-200 pb-4 flex items-center gap-3">
-          <FaLock /> Change Password
+      <section className="card px-5 sm:px-6">
+        <h2 className="flex items-center gap-2 pt-5 text-lg font-bold">
+          <FiBell className="text-muted" /> Notifications
         </h2>
-        <form onSubmit={handlePasswordSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">
-              Current Password
-            </label>
-            <input
-              type="password"
-              name="currentPassword"
-              value={passwordData.currentPassword}
-              onChange={handlePasswordChange}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">
-              New Password
-            </label>
-            <input
-              type="password"
-              name="newPassword"
-              value={passwordData.newPassword}
-              onChange={handlePasswordChange}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">
-              Confirm New Password
-            </label>
-            <input
-              type="password"
-              name="confirmPassword"
-              value={passwordData.confirmPassword}
-              onChange={handlePasswordChange}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none"
-              required
-            />
-          </div>
-          <div className="flex items-center justify-between pt-2">
-            <button
-              type="submit"
-              className="flex items-center gap-2 px-6 py-2 bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 transition-colors duration-300 cursor-pointer"
-            >
-              <FaFloppyDisk /> Save Password
+        <div>
+          <Toggle
+            label="Evening check-in reminder"
+            hint="If you haven't checked in by 6pm, your Today page shows a reminder."
+            checked={prefs.reminders}
+            onChange={(v) => setPref("reminders", v)}
+          />
+        </div>
+      </section>
+
+      <section className="card px-5 pb-5 sm:px-6">
+        <h2 className="flex items-center gap-2 pt-5 text-lg font-bold">
+          <FiShield className="text-muted" /> Privacy and consent
+        </h2>
+        {profile.role !== "mentor" && (
+          <Toggle
+            label="Let my mentor see my mood check-ins"
+            hint="Turn this off any time. Your mentor will still be able to read messages you send them."
+            checked={profile.consent?.shareMoods === true}
+            onChange={setShareMoods}
+          />
+        )}
+        <div className="space-y-3 border-t border-line pt-4 text-sm leading-relaxed text-ink/80">
+          <p>
+            {agreedOn ? `You agreed to our consent notice on ${agreedOn}. ` : ""}
+            <Link to="/privacy" target="_blank" className="font-semibold text-primary hover:underline">
+              Read it again
+            </Link>
+          </p>
+          <p>
+            To get a summary of your data, correct it, erase it, nominate someone to act for you, or raise a complaint, write to our
+            Grievance Officer, {ORG.grievanceOfficer}, at <b className="select-all">{ORG.grievanceEmail}</b>. We reply within{" "}
+            {ORG.responseDays} days. You can also complain to the Data Protection Board of India.
+          </p>
+        </div>
+      </section>
+
+      {usesPassword && (
+        <section className="card p-5 sm:p-6">
+          <h2 className="flex items-center gap-2 text-lg font-bold">
+            <FiLock className="text-muted" /> Password
+          </h2>
+          <form onSubmit={changePassword} className="mt-4 space-y-3">
+            <input type="password" autoComplete="current-password" required placeholder="Current password" className="field" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <input type="password" autoComplete="new-password" required placeholder="New password" className="field" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} />
+              <input type="password" autoComplete="new-password" required placeholder="Repeat new password" className="field" value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} />
+            </div>
+            <button disabled={pwBusy} className="btn-primary">
+              {pwBusy && <Spinner />} Update password
             </button>
-            {message.text && (
-              <p
-                className={`font-medium ${
-                  message.type === "success" ? "text-green-600" : "text-red-600"
-                }`}
-              >
-                {message.text}
-              </p>
-            )}
-          </div>
-        </form>
-      </div>
+          </form>
+        </section>
+      )}
 
-      {/* --- Notification Preferences Section --- */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <h2 className="text-xl font-semibold text-gray-700 mb-2 border-b border-gray-200 pb-4 flex items-center gap-3">
-          <FaBell /> Notification Preferences
-        </h2>
-        <ToggleSwitch
-          id="email-notifications"
-          label="Email notifications for new sessions"
-          icon={<FaEnvelope />}
-          enabled={emailNotifications}
-          setEnabled={setEmailNotifications}
-        />
-        <ToggleSwitch
-          id="newsletter"
-          label="Weekly Newsletter"
-          icon={<FaNewspaper />}
-          enabled={newsletter}
-          setEnabled={setNewsletter}
-        />
-      </div>
-
-      {/* --- Danger Zone Section --- */}
-      <div className="bg-white p-6 rounded-lg shadow-md border-2 border-red-200">
-        <h2 className="text-xl font-semibold text-red-700 mb-2 flex items-center gap-3">
-          <FaTrash /> Danger Zone
-        </h2>
-        <p className="text-gray-600 mb-4">
-          Deleting your account is a permanent action and cannot be undone. All
-          your data will be removed from our servers.
-        </p>
-        <button
-          onClick={handleDeleteAccount}
-          className="px-6 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors duration-300 cursor-pointer"
-        >
-          Delete My Account
+      <section className="card p-5 sm:p-6">
+        <button onClick={logout} className="btn-ghost w-full sm:w-auto">
+          <FiLogOut /> Log out
         </button>
-      </div>
+      </section>
+
+      <section className="rounded-2xl border border-red-200 bg-white p-5 sm:p-6">
+        <h2 className="flex items-center gap-2 text-lg font-bold text-red-700">
+          <FiAlertTriangle /> Withdraw consent and delete account
+        </h2>
+        <p className="mt-1 text-sm text-muted">
+          This withdraws your consent, removes your profile and signs you out for good. We erase the rest of your data within{" "}
+          {ORG.deletionDays} days, except anything the law requires us to keep. It can't be undone.
+        </p>
+        <button onClick={() => setDel(true)} className="btn-danger mt-4">
+          Delete my account
+        </button>
+      </section>
+
+      <Modal open={del} onClose={() => !delBusy && setDel(false)} title="Delete your account?">
+        <p className="text-sm text-muted">
+          Type <b className="text-ink">DELETE</b> to confirm{usesPassword ? ", and enter your password" : ""}.
+        </p>
+        <div className="mt-4 space-y-3">
+          <input className="field" value={delText} onChange={(e) => setDelText(e.target.value)} placeholder="DELETE" />
+          {usesPassword && (
+            <input type="password" className="field" value={delPw} onChange={(e) => setDelPw(e.target.value)} placeholder="Password" />
+          )}
+        </div>
+        <div className="mt-6 flex justify-end gap-2">
+          <button onClick={() => setDel(false)} className="btn-ghost" disabled={delBusy}>Cancel</button>
+          <button
+            onClick={deleteAccount}
+            disabled={delText !== "DELETE" || (usesPassword && !delPw) || delBusy}
+            className="btn bg-red-600 text-white hover:bg-red-700"
+          >
+            {delBusy && <Spinner />} Delete forever
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

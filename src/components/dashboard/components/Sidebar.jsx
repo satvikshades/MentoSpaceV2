@@ -1,168 +1,95 @@
-// Sidebar.jsx
 import { Link, NavLink } from "react-router-dom";
-import { 
-  FaHouse, 
-  FaClock, 
-  FaGear, 
-  FaUser, 
-  FaUsers, 
-  FaBook 
-} from "react-icons/fa6";
-import { FaCommentDots } from "react-icons/fa"; // Comes only from FA5
-import { BiLogOut } from "react-icons/bi";
-import { useEffect, useState } from "react";
-import { auth, db } from "../../../firebase";
-import { signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import {
+  FiSun,
+  FiCheckCircle,
+  FiActivity,
+  FiCompass,
+  FiCalendar,
+  FiMessageCircle,
+  FiUsers,
+  FiSettings,
+  FiLogOut,
+} from "react-icons/fi";
+import { logout } from "../../../lib/session";
+import { Avatar } from "../../ui";
 
-function Sidebar({ role }) {
-  const [userData, setUserData] = useState(null);
+const STUDENT_NAV = [
+  { to: "/dashboard", label: "Today", icon: FiSun, end: true },
+  { to: "/dashboard/habits", label: "Habits", icon: FiCheckCircle },
+  { to: "/dashboard/mood", label: "Mood journal", icon: FiActivity },
+  { to: "/dashboard/find-mentor", label: "Mentors", icon: FiCompass },
+  { to: "/dashboard/sessions", label: "Sessions", icon: FiCalendar },
+  { to: "/dashboard/chats", label: "Messages", icon: FiMessageCircle },
+];
 
-  useEffect(() => {
-    async function load() {
-      if (!auth.currentUser) return;
-      const snap = await getDoc(doc(db, "users", auth.currentUser.uid));
-      if (snap.exists()) setUserData(snap.data());
-    }
-    load();
-  }, []);
+const MENTOR_NAV = [
+  { to: "/dashboard", label: "Today", icon: FiSun, end: true },
+  { to: "/dashboard/my-students", label: "Students", icon: FiUsers, badge: true },
+  { to: "/dashboard/sessions", label: "Sessions", icon: FiCalendar },
+  { to: "/dashboard/chats", label: "Messages", icon: FiMessageCircle },
+];
 
-  const handleLogout = async () => {
-    await signOut(auth);
-    localStorage.clear();
-    window.location.href = "/login";
-  };
+function Item({ to, label, icon, end, count }) {
+  const Icon = icon;
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) =>
+        `group flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-semibold transition ${
+          isActive ? "bg-primary-50 text-primary" : "text-ink/70 hover:bg-bg-light-gray hover:text-ink"
+        }`
+      }
+    >
+      <Icon className="h-[18px] w-[18px] shrink-0" />
+      <span className="flex-1">{label}</span>
+      {count > 0 && (
+        <span className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-white">
+          {count}
+        </span>
+      )}
+    </NavLink>
+  );
+}
+
+function Sidebar({ role, profile, pending = 0 }) {
+  const nav = role === "mentor" ? MENTOR_NAV : STUDENT_NAV;
 
   return (
-    <div className="flex flex-col h-full p-4">
-      <Link to="/" className="mb-6">
-        <h2 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+    <div className="flex h-full flex-col px-4 py-6">
+      <Link to="/" className="mb-8 px-3">
+        <span className="wordmark text-[22px]">
           MentoSpace<span className="text-secondary">.</span>
-        </h2>
+        </span>
       </Link>
 
-      <nav className="flex-grow">
-        <ul className="space-y-2">
-
-          {/* My Profile */}
-          <li>
-            <NavLink
-              to="/dashboard/profile"
-              className={({ isActive }) =>
-                isActive
-                  ? "block p-3 rounded bg-primary/10 text-primary"
-                  : "block p-3 rounded hover:bg-gray-100"
-              }
-            >
-              <FaHouse className="inline mr-2" /> My Profile
-            </NavLink>
-          </li>
-
-          {/* Student Only → Find Mentor */}
-          {role === "student" && (
-            <li>
-              <NavLink
-                to="/dashboard/find-mentor"
-                className={({ isActive }) =>
-                  isActive
-                    ? "block p-3 rounded bg-primary/10 text-primary"
-                    : "block p-3 rounded hover:bg-gray-100"
-                }
-              >
-                🔎 Find Mentor
-              </NavLink>
-            </li>
-          )}
-
-          {/* Mentor Only → Sessions + My Students */}
-          {role === "mentor" && (
-            <>
-              <li>
-                <NavLink
-                  to="/dashboard/sessions"
-                  className={({ isActive }) =>
-                    isActive
-                      ? "block p-3 rounded bg-primary/10 text-primary"
-                      : "block p-3 rounded hover:bg-gray-100"
-                  }
-                >
-                  <FaClock className="inline mr-2" /> Sessions
-                </NavLink>
-              </li>
-
-              <li>
-                <NavLink
-                  to="/dashboard/my-students"
-                  className={({ isActive }) =>
-                    isActive
-                      ? "block p-3 rounded bg-primary/10 text-primary"
-                      : "block p-3 rounded hover:bg-gray-100"
-                  }
-                >
-                  <FaUsers className="inline mr-2" /> My Students
-                </NavLink>
-              </li>
-            </>
-          )}
-
-          {/* Chats */}
-          <li>
-            <NavLink
-              to="/dashboard/chats"
-              className={({ isActive }) =>
-                isActive
-                  ? "block p-3 rounded bg-primary/10 text-primary"
-                  : "block p-3 rounded hover:bg-gray-100"
-              }
-            >
-              <FaCommentDots className="inline mr-2" /> Chats
-            </NavLink>
-          </li>
-
-          {/* Settings */}
-          <li>
-            <NavLink
-              to="/dashboard/settings"
-              className={({ isActive }) =>
-                isActive
-                  ? "block p-3 rounded bg-primary/10 text-primary"
-                  : "block p-3 rounded hover:bg-gray-100"
-              }
-            >
-              <FaGear className="inline mr-2" /> Settings
-            </NavLink>
-          </li>
-
-        </ul>
+      <nav className="flex-1 space-y-1">
+        {nav.map((n) => (
+          <Item key={n.to} {...n} count={n.badge ? pending : 0} />
+        ))}
       </nav>
 
-      {/* Bottom Profile Display */}
-      <div className="mt-auto">
-        {userData && (
-          <div className="flex items-center gap-3 p-3 mt-3 bg-gray-100 rounded-lg">
-            <img
-              src={
-                userData.profilePic ||
-                `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                  userData.name
-                )}`
-              }
-              alt="profile"
-              className="w-10 h-10 rounded-full"
-            />
-            <div>
-              <div className="font-semibold">{userData.name}</div>
-              <div className="text-sm text-gray-500">{userData.role}</div>
-            </div>
-          </div>
-        )}
-
+      <div className="space-y-1 border-t border-line pt-4">
+        <Item to="/dashboard/settings" label="Settings" icon={FiSettings} />
         <button
-          onClick={handleLogout}
-          className="w-full mt-3 p-3 bg-red-100 text-red-600 rounded-lg"
+          onClick={logout}
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-semibold text-ink/70 transition hover:bg-red-50 hover:text-red-600"
         >
-          <BiLogOut /> Logout
+          <FiLogOut className="h-[18px] w-[18px]" /> Log out
         </button>
+
+        {profile && (
+          <Link
+            to="/dashboard/profile"
+            className="mt-3 flex items-center gap-3 rounded-xl p-2 transition hover:bg-bg-light-gray"
+          >
+            <Avatar person={profile} size={38} />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold">{profile.name || "You"}</p>
+              <p className="text-xs capitalize text-muted">{profile.role || "student"}</p>
+            </div>
+          </Link>
+        )}
       </div>
     </div>
   );

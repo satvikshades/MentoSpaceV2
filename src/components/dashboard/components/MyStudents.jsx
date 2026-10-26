@@ -1,258 +1,190 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { auth, db } from "../../../firebase";
-import {
-  collection,
-  query,
-  where,
-  onSnapshot,
-  doc,
-  updateDoc,
-  arrayUnion,
-  arrayRemove,
-  getDoc,
-  setDoc,
-} from "firebase/firestore";
-import { FaUserCheck, FaUsers, FaCommentDots } from "react-icons/fa";
+import { Link } from "react-router-dom";
+import toast from "react-hot-toast";
+import { arrayRemove, arrayUnion, collection, doc, getDoc, onSnapshot, query, setDoc, updateDoc, where } from "firebase/firestore";
+import { FiActivity, FiCheck, FiMessageCircle, FiX } from "react-icons/fi";
+import { db } from "../../../firebase";
+import { useDashboard } from "../../../lib/useProgress";
+import { timeAgo, toDate } from "../../../lib/progress";
+import { Avatar, EmptyState, Modal, PageHeader, PageSkeleton, Spinner } from "../../ui";
 
 function MyStudents() {
-  const [requests, setRequests] = useState([]);
-  const [acceptedStudents, setAcceptedStudents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [studentsInfo, setStudentsInfo] = useState({});
-  const [mentorInfo, setMentorInfo] = useState(null);
-
-  const user = auth.currentUser;
-  const navigate = useNavigate();
+  const { user, profile } = useDashboard();
+  const [reqs, setReqs] = useState(null);
+  const [people, setPeople] = useState({});
+  const [busy, setBusy] = useState(null);
+  const [removing, setRemoving] = useState(null);
 
   useEffect(() => {
-    if (!user) return;
-
-    const q = query(
-      collection(db, "requests"),
-      where("mentorId", "==", user.uid)
-    );
-
-    const unsub = onSnapshot(q, (snapshot) => {
-      const allReqs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-
-      const latestReqs = {};
-      allReqs.forEach((r) => {
-        const key = r.studentId;
-        if (!latestReqs[key] || r.createdAt > latestReqs[key].createdAt) {
-          latestReqs[key] = r;
-        }
-      });
-
-      const finalList = Object.values(latestReqs);
-
-      setRequests(finalList.filter((r) => r.status === "pending"));
-      setAcceptedStudents(finalList.filter((r) => r.status === "accepted"));
-
-      setLoading(false);
+    const q = query(collection(db, "requests"), where("mentorId", "==", user.uid));
+    return onSnapshot(q, (snap) => {
+      // keep only the latest request per student
+      const latest = {};
+      snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .forEach((r) => {
+          const prev = latest[r.studentId];
+          if (!prev || (toDate(r.createdAt) || 0) > (toDate(prev.createdAt) || 0)) latest[r.studentId] = r;
+        });
+      setReqs(Object.values(latest));
     });
-
-    return () => unsub();
-  }, [user]);
+  }, [user.uid]);
 
   useEffect(() => {
-    if (!user) return;
-    (async () => {
-      const snap = await getDoc(doc(db, "users", user.uid));
-      if (snap.exists()) setMentorInfo(snap.data());
-    })();
-  }, [user]);
+    if (!reqs) return;
+    const missing = reqs.map((r) => r.studentId).filter((id) => id && !people[id]);
+    if (!missing.length) return;
+    Promise.all(missing.map((id) => getDoc(doc(db, "users", id)))).then((snaps) =>
+      setPeople((p) => {
+        const next = { ...p };
+        snaps.forEach((s) => (next[s.id] = s.exists() ? s.data() : { name: "Student" }));
+        return next;
+      })
+    );
+  }, [reqs, people]);
 
-  useEffect(() => {
-    async function fetchStudents() {
-      const ids = [
-        ...requests.map((r) => r.studentId),
-        ...acceptedStudents.map((r) => r.studentId),
-      ].filter(Boolean);
+  if (!reqs) return <PageSkeleton />;
 
-      const unique = [...new Set(ids)];
-      const data = {};
+  const pending = reqs.filter((r) => r.status === "pending");
+  const accepted = reqs.filter((r) => r.status === "accepted");
 
-      for (const id of unique) {
-        const snap = await getDoc(doc(db, "users", id));
-        if (snap.exists()) data[id] = snap.data();
-      }
-
-      setStudentsInfo(data);
-    }
-
-    if (requests.length || acceptedStudents.length) fetchStudents();
-    else setStudentsInfo({});
-  }, [requests, acceptedStudents]);
-
-  if (loading) return <div className="p-6">Loading students...</div>;
-
-  const handleAccept = async (req) => {
-    const studentId = req.studentId;
-    const mentorId = user.uid;
-
+  const accept = async (r) => {
+    setBusy(r.id);
     try {
-      await updateDoc(doc(db, "requests", req.id), {
-        status: "accepted",
-      });
-
-      await updateDoc(doc(db, "users", mentorId), {
-        myStudents: arrayUnion(studentId),
-      });
-
-      const chatId = `${studentId}_${mentorId}`;
+      await updateDoc(doc(db, "requests", r.id), { status: "accepted" });
+      await updateDoc(doc(db, "users", user.uid), { myStudents: arrayUnion(r.studentId) });
+      const chatId = `${r.studentId}_${user.uid}`;
       const chatRef = doc(db, "chats", chatId);
-      const chatSnap = await getDoc(chatRef);
-
-      if (!chatSnap.exists()) {
-        const studentData = studentsInfo[studentId] || {};
-        const studentName = studentData.name || "Student";
-        const mentorName = mentorInfo?.name || "Mentor";
-
+      const existing = await getDoc(chatRef);
+      if (!existing.exists()) {
         await setDoc(chatRef, {
-          members: [studentId, mentorId],
-          userNames: {
-            [studentId]: studentName,
-            [mentorId]: mentorName,
-          },
+          members: [r.studentId, user.uid],
+          userNames: { [r.studentId]: people[r.studentId]?.name || "Student", [user.uid]: profile.name || "Mentor" },
           createdAt: Date.now(),
         });
       }
-
-      alert("Student Accepted!");
-    } catch (error) {
-      console.error(error);
-      alert("Failed to accept student.");
+      toast.success(`You're now mentoring ${people[r.studentId]?.name?.split(" ")[0] || "them"}`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Couldn't accept. Try again.");
+    } finally {
+      setBusy(null);
     }
   };
 
-  const handleRemoveStudent = async (req) => {
-    const studentId = req.studentId;
-    const mentorId = user.uid;
-
-    if (!window.confirm("Remove this student?")) return;
-
+  const decline = async (r) => {
+    setBusy(r.id);
     try {
-      await updateDoc(doc(db, "users", mentorId), {
-        myStudents: arrayRemove(studentId),
-      });
-
-      await updateDoc(doc(db, "requests", req.id), {
-        status: "removed",
-      });
-
-      alert("Student removed.");
-    } catch (error) {
-      console.error(error);
-      alert("Failed to remove student.");
+      await updateDoc(doc(db, "requests", r.id), { status: "declined" });
+      toast("Request declined");
+    } catch {
+      toast.error("Couldn't decline.");
+    } finally {
+      setBusy(null);
     }
   };
 
-  const openChatFor = async (studentId) => {
-    const mentorId = user.uid;
-    const chatId = `${studentId}_${mentorId}`;
-    navigate(`/dashboard/chat/${chatId}`);
+  const remove = async () => {
+    const r = removing;
+    setRemoving(null);
+    try {
+      await updateDoc(doc(db, "users", user.uid), { myStudents: arrayRemove(r.studentId) });
+      await updateDoc(doc(db, "requests", r.id), { status: "removed" });
+      toast("Student removed");
+    } catch {
+      toast.error("Couldn't remove.");
+    }
   };
 
   return (
-    <div className="space-y-8">
-      <h1 className="text-3xl font-bold flex items-center gap-3">
-        <FaUsers /> My Students
-      </h1>
+    <div>
+      <PageHeader eyebrow="Students" title="The people you're helping" />
 
-      {/* Pending Requests */}
-      <section className="bg-white p-6 rounded-lg shadow">
-        <h2 className="text-xl font-semibold mb-4">Pending Requests</h2>
-
-        {requests.map((r) => {
-          const st = studentsInfo[r.studentId];
-          return (
-            <div
-              key={r.id}
-              className="p-4 border rounded-lg flex justify-between items-center"
-            >
-              <div className="flex items-center gap-3">
-                <img
-                  src={
-                    st?.profilePic ||
-                    `https://ui-avatars.com/api/?name=${st?.name || "User"}`
-                  }
-                  className="w-12 h-12 rounded-full"
-                />
-                <div>
-                  <p className="font-semibold">{st?.name}</p>
-                  <p className="text-sm text-gray-500">{st?.email}</p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => handleAccept(r)}
-                className="px-4 py-2 bg-primary text-white rounded-lg flex items-center gap-2 hover:scale-105 transition"
-              >
-                <FaUserCheck /> Accept
-              </button>
-            </div>
-          );
-        })}
-      </section>
-
-      {/* Accepted Students */}
-      <section className="bg-white p-6 rounded-lg shadow">
-        <h2 className="text-xl font-semibold mb-4">Accepted Students</h2>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {acceptedStudents.map((r) => {
-            const st = studentsInfo[r.studentId];
-
-            return (
-              <div
-                key={r.id}
-                className="p-4 border rounded-lg shadow-sm hover:shadow-lg transition"
-              >
-                <div className="flex items-center gap-3">
-                  <img
-                    src={
-                      st?.profilePic ||
-                      `https://ui-avatars.com/api/?name=${st?.name || "User"}`
-                    }
-                    className="w-14 h-14 rounded-full"
-                  />
-
-                  <div className="flex-1">
-                    <p className="font-bold">{st?.name}</p>
-                    <p className="text-sm text-gray-600">{st?.email}</p>
+      {pending.length > 0 && (
+        <section className="mb-8">
+          <h2 className="mb-3 flex items-center gap-2 text-lg font-bold">
+            Waiting for you
+            <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-white">{pending.length}</span>
+          </h2>
+          <div className="space-y-2">
+            {pending.map((r) => {
+              const st = people[r.studentId];
+              return (
+                <div key={r.id} className="card flex flex-col gap-4 p-4 sm:flex-row sm:items-center animate-rise">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <Avatar person={st} size={48} />
+                    <div className="min-w-0">
+                      <p className="truncate font-bold">{st?.name || "…"}</p>
+                      <p className="truncate text-sm text-muted">
+                        Asked {timeAgo(r.createdAt)}
+                        {st?.bio ? ` · ${st.bio}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => decline(r)} disabled={busy === r.id} className="btn-ghost flex-1 sm:flex-none">
+                      <FiX /> Decline
+                    </button>
+                    <button onClick={() => accept(r)} disabled={busy === r.id} className="btn-primary flex-1 sm:flex-none">
+                      {busy === r.id ? <Spinner /> : <FiCheck />} Accept
+                    </button>
                   </div>
                 </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
-                <div className="flex flex-col gap-2 mt-4">
-                  <button
-                    onClick={() => openChatFor(r.studentId)}
-                    className="bg-primary text-white px-3 py-2 rounded hover:scale-105 transition"
-                  >
-                    Message
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      navigate(`/dashboard/insights/${r.studentId}`)
-                    }
-                    className="bg-blue-500 text-white px-3 py-2 rounded hover:scale-105 transition"
-                  >
-                    View Mood Insights
-                  </button>
-
-                  <button
-                    onClick={() => handleRemoveStudent(r)}
-                    className="bg-red-500 text-white px-3 py-2 rounded hover:scale-105 transition"
-                  >
-                    Remove Student
+      <section>
+        <h2 className="mb-3 text-lg font-bold">Your students</h2>
+        {accepted.length === 0 ? (
+          <EmptyState
+            icon="🌱"
+            title="No students yet"
+            body="Students find you through the Mentors page. A clear bio about what you can help with makes a big difference."
+            action={<Link to="/dashboard/profile" className="btn-soft">Edit your bio</Link>}
+          />
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {accepted.map((r) => {
+              const st = people[r.studentId];
+              return (
+                <div key={r.id} className="card flex flex-col p-5">
+                  <div className="flex items-center gap-3">
+                    <Avatar person={st} size={52} />
+                    <div className="min-w-0">
+                      <p className="truncate font-bold">{st?.name || "…"}</p>
+                      <p className="truncate text-sm text-muted">{st?.email}</p>
+                    </div>
+                  </div>
+                  <div className="mt-5 grid grid-cols-2 gap-2">
+                    <Link to={`/dashboard/chat/${r.studentId}_${user.uid}`} className="btn-primary text-sm">
+                      <FiMessageCircle /> Message
+                    </Link>
+                    <Link to={`/dashboard/insights/${r.studentId}`} className="btn-ghost text-sm">
+                      <FiActivity /> Moods
+                    </Link>
+                  </div>
+                  <button onClick={() => setRemoving(r)} className="mt-3 text-xs font-semibold text-muted hover:text-red-600">
+                    Stop mentoring
                   </button>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </section>
+
+      <Modal open={!!removing} onClose={() => setRemoving(null)} title="Stop mentoring?">
+        <p className="text-sm text-muted">
+          {people[removing?.studentId]?.name || "This student"} will no longer be in your list. They can send a new request later.
+        </p>
+        <div className="mt-6 flex justify-end gap-2">
+          <button onClick={() => setRemoving(null)} className="btn-ghost">Cancel</button>
+          <button onClick={remove} className="btn bg-red-600 text-white hover:bg-red-700">Stop mentoring</button>
+        </div>
+      </Modal>
     </div>
   );
 }
