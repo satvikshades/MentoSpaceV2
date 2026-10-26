@@ -1,0 +1,43 @@
+# Publishes firestore.rules to the mentospacev2 Firebase project whenever the
+# rules change on main. Needs the repository secret
+# FIREBASE_SERVICE_ACCOUNT_MENTOSPACEV2 (a service account JSON key with the
+# "Firebase Rules Admin" and "Service Usage Consumer" roles).
+
+name: Deploy Firestore rules
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - firestore.rules
+      - firebase.json
+  workflow_dispatch:
+
+jobs:
+  deploy-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check the service account secret exists
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MENTOSPACEV2 }}
+        run: |
+          if [ -z "$SA" ]; then
+            echo "::error::Add the FIREBASE_SERVICE_ACCOUNT_MENTOSPACEV2 secret in GitHub → Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+
+      - name: Publish rules
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: npx --yes firebase-tools@13 deploy --only firestore:rules --project mentospacev2 --non-interactive
+
+      - name: Remove the key file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"
