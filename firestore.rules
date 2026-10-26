@@ -143,6 +143,53 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ---------------------------------------------------------- sales team
+    function repDoc() { return /databases/$(database)/documents/sales_reps/$(request.auth.uid); }
+    function isApprovedRep() {
+      return signedIn() && exists(repDoc()) && get(repDoc()).data.status == 'approved';
+    }
+
+    match /sales_reps/{uid} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.get('target', 0) == 0;
+      allow update: if isAdmin() || (
+        signedIn() && request.auth.uid == uid
+        && !changes(['status', 'statusReason', 'statusAt', 'target'])
+      );
+      allow delete: if isAdmin();
+    }
+
+    // public leaderboard rows (name, city, level, XP, contracts)
+    match /sales_board/{uid} {
+      allow read: if isAdmin() || isApprovedRep();
+      allow create: if signedIn() && request.auth.uid == uid;
+      allow update: if isAdmin() || (isApprovedRep() && request.auth.uid == uid);
+      allow delete: if isAdmin();
+    }
+
+    // schools, colleges and universities in each rep's pipeline
+    match /sales_leads/{id} {
+      allow read: if isAdmin() || (isApprovedRep() && resource.data.repId == request.auth.uid);
+      allow create: if isAdmin() || (
+        isApprovedRep()
+        && request.resource.data.repId == request.auth.uid
+        && request.resource.data.stage == 0
+        && request.resource.data.contractVerified == false
+      );
+      allow update: if isAdmin() || (
+        isApprovedRep()
+        && resource.data.repId == request.auth.uid
+        && request.resource.data.repId == request.auth.uid
+        && !changes(['contractVerified', 'contractVerifiedAt', 'contractVerifiedBy', 'assignedBy'])
+        && request.resource.data.stage >= resource.data.stage
+        && request.resource.data.stage <= resource.data.stage + 1
+      );
+      allow delete: if isAdmin();
+    }
+
     // everything else is closed
     match /{document=**} {
       allow read, write: if false;
