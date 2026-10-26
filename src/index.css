@@ -193,3 +193,15 @@
     radial-gradient(1200px 500px at 85% -10%, rgba(212, 175, 55, 0.10), transparent 60%),
     radial-gradient(800px 400px at -10% 110%, rgba(212, 175, 55, 0.06), transparent 60%);
 }
+.admin-login .field {
+  background: var(--color-onyx);
+  border-color: var(--color-gold-line);
+  color: var(--color-champagne);
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  font-size: 0.875rem;
+}
+.admin-login .field:focus {
+  border-color: color-mix(in srgb, var(--color-gold) 60%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-gold) 10%, transparent);
+}
