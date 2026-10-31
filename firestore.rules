@@ -191,6 +191,31 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ------------------------------------------------- website contact form
+    // Anyone (signed in or not) can send one enquiry; only the admin can see,
+    // update or delete them. Field limits match src/lib/contact.js.
+    function optStr(d, k, n) { return d.get(k, '') is string && d.get(k, '').size() <= n; }
+
+    match /contact_messages/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['name', 'email', 'phone', 'organisation', 'students', 'plan', 'topic', 'message', 'status', 'source', 'createdAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
+        && request.resource.data.email is string
+        && request.resource.data.email.size() <= 200
+        && request.resource.data.email.matches('^[^@\\s]+@[^@\\s]+[.][^@\\s]+$')
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0 && request.resource.data.message.size() <= 4000
+        && optStr(request.resource.data, 'phone', 30)
+        && optStr(request.resource.data, 'organisation', 150)
+        && optStr(request.resource.data, 'students', 10)
+        && request.resource.data.get('plan', '') in ['', 'essential', 'connect', 'complete']
+        && request.resource.data.get('topic', 'other') in ['pilot', 'pricing', 'mentor', 'other']
+        && request.resource.data.get('source', 'website') == 'website'
+        && request.resource.data.status == 'new'
+        && request.resource.data.createdAt == request.time;
+      allow read, update, delete: if isAdmin();
+    }
+
     // everything else is closed
     match /{document=**} {
       allow read, write: if false;
