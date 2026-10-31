@@ -73,10 +73,13 @@ function Bars({ series }) {
   );
 }
 
-export function OverviewSection({ data, d, go, openPerson }) {
+export function OverviewSection({ data, d, go, openPerson, messages }) {
   const recentAudit = [...(data.admin_audit || [])].sort((a, b) => (toDate(b.at)?.getTime() || 0) - (toDate(a.at)?.getTime() || 0)).slice(0, 6);
   const mixTotal = Object.values(d.moodMix).reduce((a, b) => a + b, 0);
   const attention = [
+    ...(messages || [])
+      .filter((m) => m.status === "new")
+      .map((m) => ({ id: "msg" + m.id, kind: `Website message${m.organisation ? ` · ${m.organisation}` : ""}`, who: { name: m.name }, tone: "gold", label: "Message", act: () => go("messages") })),
     ...d.pendingMentorList.map((m) => ({ id: m.id, kind: "Mentor to review", who: m, tone: "amber", act: () => go("approvals") })),
     ...[...new Map(d.lowMoods.map((m) => [m.studentId, m])).values()].map((m) => ({
       id: "lm" + m.id,
@@ -110,7 +113,7 @@ export function OverviewSection({ data, d, go, openPerson }) {
             <span className="text-xs text-sand">{attention.length ? `${attention.length} items` : "All clear"}</span>
           </div>
           {attention.length === 0 ? (
-            <Empty>Nothing waiting. New mentors, low moods and guardian checks will show up here.</Empty>
+            <Empty>Nothing waiting. Website messages, new mentors, low moods and guardian checks will show up here.</Empty>
           ) : (
             <ul className="divide-y divide-gold-line">
               {attention.map((a) => (
@@ -121,7 +124,7 @@ export function OverviewSection({ data, d, go, openPerson }) {
                       <p className="truncate text-sm font-semibold">{a.who?.name || "Unknown"}</p>
                       <p className="truncate text-xs text-sand">{a.kind}</p>
                     </div>
-                    <Pill tone={a.tone}>{a.tone === "red" ? "Safety" : a.tone === "amber" ? "Review" : "Verify"}</Pill>
+                    <Pill tone={a.tone}>{a.label || (a.tone === "red" ? "Safety" : a.tone === "amber" ? "Review" : "Verify")}</Pill>
                     <FiArrowRight className="text-sand" />
                   </button>
                 </li>

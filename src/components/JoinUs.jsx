@@ -15,8 +15,8 @@ const JoinUs = () => {
               Mentors see how their students are doing at a glance, get a heads-up when someone logs a hard day, run
               sessions, and message directly. You choose who you take on.
             </p>
-            <Link to="/register" className="btn-primary mt-8 px-6 py-3.5 text-base">
-              Become a mentor <FiArrowRight />
+            <Link to="/contact?topic=mentor" className="btn-primary mt-8 px-6 py-3.5 text-base">
+              Apply to be a mentor <FiArrowRight />
             </Link>
           </div>
           <div className="rounded-3xl bg-white p-6 ring-1 ring-line">
@@ -46,13 +46,21 @@ const JoinUs = () => {
 
       <section className="bg-white py-24 sm:py-32">
         <div className="mx-auto max-w-3xl px-5 text-center sm:px-8">
-          <h2 className="text-[38px] font-extrabold leading-[1.05] tracking-[-0.03em] sm:text-[56px]">
-            Start with how you feel <span className="font-serif font-medium italic text-primary">today.</span>
+          <p className="eyebrow">For schools</p>
+          <h2 className="mt-3 text-[38px] font-extrabold leading-[1.05] tracking-[-0.03em] sm:text-[56px]">
+            Bring MentoSpace to your <span className="font-serif font-medium italic text-primary">school.</span>
           </h2>
-          <p className="mx-auto mt-5 max-w-md text-ink/70">It takes about a minute to sign up. Your first check-in takes five seconds.</p>
-          <Link to="/register" className="btn-primary mt-9 px-7 py-4 text-base">
-            Create your account <FiArrowRight />
-          </Link>
+          <p className="mx-auto mt-5 max-w-md text-ink/70">
+            Start with a pilot. Tell us a little about your students and we'll get back to you by email.
+          </p>
+          <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
+            <Link to="/contact" className="btn-primary px-7 py-4 text-base">
+              Contact us to book a pilot <FiArrowRight />
+            </Link>
+            <a href="#pricing" className="btn-ghost px-7 py-4 text-base">
+              Compare plans
+            </a>
+          </div>
         </div>
       </section>
     </>

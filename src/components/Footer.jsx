@@ -13,13 +13,14 @@ function Footer() {
             <p className="mt-3 text-sm leading-relaxed text-muted">Building strong individuals, one check-in at a time.</p>
           </div>
           <div className="grid grid-cols-2 gap-x-16 gap-y-3 text-sm font-semibold text-ink/70">
-            <a href="#how" className="hover:text-ink">How it works</a>
-            <Link to="/register" className="hover:text-ink">Create account</Link>
-            <a href="#programs" className="hover:text-ink">Programs</a>
-            <Link to="/login" className="hover:text-ink">Log in</Link>
-            <a href="#mentors" className="hover:text-ink">For mentors</a>
+            <Link to="/#how" className="hover:text-ink">How it works</Link>
+            <Link to="/contact" className="hover:text-ink">Contact us</Link>
+            <Link to="/#programs" className="hover:text-ink">Programs</Link>
+            <Link to="/#pricing" className="hover:text-ink">Pricing</Link>
+            <Link to="/#mentors" className="hover:text-ink">For mentors</Link>
             <Link to="/privacy" className="hover:text-ink">Privacy and consent</Link>
             <Link to="/sales" className="hover:text-ink">Join our sales team</Link>
+            <a href="mailto:permanentwofliving@gmail.com" className="break-all hover:text-ink">permanentwofliving@gmail.com</a>
           </div>
         </div>
 

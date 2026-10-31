@@ -11,6 +11,7 @@ import {
   FiLink,
   FiLock,
   FiLogOut,
+  FiMail,
   FiMenu,
   FiRefreshCw,
   FiShield,
@@ -18,7 +19,7 @@ import {
   FiUsers,
 } from "react-icons/fi";
 import { auth } from "../../firebase";
-import { ADMIN_EMAILS, IDLE_LOCK_MINUTES, isAdminUser, loadEverything } from "../../lib/admin";
+import { ADMIN_EMAILS, IDLE_LOCK_MINUTES, isAdminUser, loadEverything, watchMessages } from "../../lib/admin";
 import { PasswordInput } from "../../components/AuthShell";
 import { Crest } from "./AdminUI";
 import {
@@ -34,9 +35,11 @@ import {
 } from "./AdminSections";
 import { useDerived } from "../../lib/adminDerive";
 import { SalesSection } from "./AdminSales";
+import { MessagesSection } from "./AdminMessages";
 
 const NAV = [
   { key: "overview", label: "Overview", icon: FiGrid },
+  { key: "messages", label: "Messages", icon: FiMail, badge: "newMessages" },
   { key: "approvals", label: "Approvals", icon: FiCheckSquare, badge: "pendingMentors" },
   { key: "people", label: "People", icon: FiUsers },
   { key: "safety", label: "Safety", icon: FiAlertTriangle, badge: "safetyCount" },
@@ -135,6 +138,8 @@ export default function MasterAdmin() {
   const [tab, setTab] = useState("overview");
   const [navOpen, setNavOpen] = useState(false);
   const [personId, setPersonId] = useState(null);
+  const [messages, setMessages] = useState(null);
+  const [messagesError, setMessagesError] = useState(false);
   const lastActive = useRef(Date.now());
 
   useEffect(() => onAuthStateChanged(auth, (u) => setUser(u || null)), []);
@@ -156,6 +161,42 @@ export default function MasterAdmin() {
   useEffect(() => {
     if (admin) refresh();
   }, [admin, refresh]);
+
+  // Website messages stream in live, so a new enquiry shows up without a refresh.
+  useEffect(() => {
+    if (!admin) return;
+    let first = true;
+    const unsub = watchMessages(
+      (list, snap) => {
+        setMessages(list);
+        setMessagesError(false);
+        if (!first) {
+          snap
+            .docChanges()
+            .filter((c) => c.type === "added")
+            .forEach((c) => {
+              const m = c.doc.data();
+              toast(`New message from ${m.name}${m.organisation ? ` · ${m.organisation}` : ""}`, { icon: "✉️", duration: 6000 });
+            });
+        }
+        first = false;
+      },
+      (err) => {
+        console.warn("could not read contact_messages", err?.code || err);
+        setMessages([]);
+        setMessagesError(true);
+      }
+    );
+    return unsub;
+  }, [admin]);
+
+  const newMessages = (messages || []).filter((m) => m.status === "new").length;
+
+  // unread count in the browser tab
+  useEffect(() => {
+    if (!admin) return;
+    document.title = newMessages ? `(${newMessages}) MentoSpace` : "MentoSpace";
+  }, [admin, newMessages]);
 
   // idle lock
   useEffect(() => {
@@ -244,7 +285,8 @@ export default function MasterAdmin() {
     window.scrollTo(0, 0);
   };
   const openPerson = (id) => setPersonId(id);
-  const sectionProps = { data, d, refresh, openPerson, go };
+  const sectionProps = { data, d, refresh, openPerson, go, messages, messagesError };
+  const badges = { ...d, newMessages };
 
   return (
     <div className="admin-root admin-grain min-h-screen bg-onyx text-champagne">
@@ -266,7 +308,7 @@ export default function MasterAdmin() {
 
         <nav className="mt-10 flex-1 space-y-1">
           {NAV.map(({ key, label, icon: Icon, badge }) => { // eslint-disable-line no-unused-vars
-            const count = badge ? d[badge] : 0;
+            const count = badge ? badges[badge] : 0;
             const active = tab === key;
             return (
               <button
@@ -321,6 +363,7 @@ export default function MasterAdmin() {
           ) : (
             <div className="mx-auto max-w-7xl">
               {tab === "overview" && <OverviewSection {...sectionProps} />}
+              {tab === "messages" && <MessagesSection {...sectionProps} />}
               {tab === "approvals" && <ApprovalsSection {...sectionProps} />}
               {tab === "people" && <PeopleSection {...sectionProps} />}
               {tab === "safety" && <SafetySection {...sectionProps} />}

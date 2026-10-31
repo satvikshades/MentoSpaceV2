@@ -11,8 +11,12 @@ import {
   arrayRemove,
   arrayUnion,
   collection,
+  deleteDoc,
   doc,
   getDocs,
+  limit,
+  onSnapshot,
+  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -283,4 +287,32 @@ export function downloadCSV(filename, rows) {
   a.download = filename;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/* ------------------------------------------------------------------ */
+/* Website messages (contact form)                                     */
+/* ------------------------------------------------------------------ */
+
+/** Live list of contact form messages, newest first. Returns an unsubscribe. */
+export function watchMessages(onData, onError) {
+  return onSnapshot(
+    query(collection(db, "contact_messages"), orderBy("createdAt", "desc"), limit(500)),
+    (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: "estimate" }) })), snap),
+    onError
+  );
+}
+
+/** status: "new" | "read" | "replied" | "archived" */
+export async function setMessageStatus(message, status) {
+  await updateDoc(doc(db, "contact_messages", message.id), {
+    status,
+    statusAt: new Date().toISOString(),
+    statusBy: auth.currentUser?.email || "",
+  });
+  if (status === "replied" || status === "archived") await audit(`message.${status}`, { id: message.id, name: message.name }, { email: message.email });
+}
+
+export async function deleteMessage(message, reason) {
+  await deleteDoc(doc(db, "contact_messages", message.id));
+  await audit("message.delete", { id: message.id, name: message.name }, { email: message.email, reason });
 }

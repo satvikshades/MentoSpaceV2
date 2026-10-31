@@ -68,11 +68,11 @@ const HeroSection = () => {
             No real name needed.
           </p>
           <div className="mt-9 flex flex-wrap items-center gap-3 animate-rise" style={{ animationDelay: "180ms" }}>
-            <Link to="/register" className="btn-primary px-6 py-3.5 text-base">
-              Start your first check-in <FiArrowRight />
+            <Link to="/contact" className="btn-primary px-6 py-3.5 text-base">
+              Book a pilot for your school <FiArrowRight />
             </Link>
-            <a href="#how" className="btn-ghost px-6 py-3.5 text-base">
-              See how it works
+            <a href="#pricing" className="btn-ghost px-6 py-3.5 text-base">
+              See plans
             </a>
           </div>
           <p className="mt-10 text-sm text-muted animate-rise" style={{ animationDelay: "240ms" }}>
