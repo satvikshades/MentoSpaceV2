@@ -22,7 +22,6 @@ export const PLANS = [
     sessions: 2,
     name: "Connect",
     inherits: "Essential",
-    featured: true,
     features: [
       "2 individual mentoring sessions per month",
       "Monthly group mentorship sessions",
@@ -37,6 +36,7 @@ export const PLANS = [
     sessions: 3,
     name: "Complete",
     inherits: "Connect",
+    featured: true,
     features: [
       "3 individual mentoring sessions per month",
       "Quarterly parent mental wellness workshops",
